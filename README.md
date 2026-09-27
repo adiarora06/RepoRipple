@@ -4,7 +4,7 @@
 
 RepoRipple is a local-first change-impact analyzer for engineers and coding agents. It builds a lightweight dependency graph from a repository, reads the current Git diff, traces reverse dependencies, recommends relevant tests, and emits a review-ready Markdown or JSON report.
 
-No API key, hosted service, source upload, or framework integration is required.
+The deterministic analyzer requires no API key, hosted service, source upload, or framework integration. An optional, explicitly requested OpenRouter explanation can turn its anonymized evidence into a short narrative without changing the underlying analysis.
 
 ## Why RepoRipple?
 
@@ -37,6 +37,9 @@ reporipple /path/to/repository --base main --format json --output impact.json
 
 # Fail CI when a change reaches high risk.
 reporipple . --base origin/main --fail-on high
+
+# Audit the exact anonymized OpenRouter request without sending it.
+reporipple . --base origin/main --explain-preview
 ```
 
 ## GitHub Action
@@ -133,6 +136,35 @@ client-specific commands and configuration.
 
 The core intentionally avoids LLM scoring. Results stay reproducible, private, fast, and usable in CI. Optional AI explanations can be layered over the JSON output without making correctness depend on a model.
 
+## Optional OpenRouter explanation
+
+AI explanation is off by default and is activated only by `--explain`. The deterministic risk level, evidence, report, and `--fail-on` exit status remain authoritative even if OpenRouter is unavailable or returns an invalid response.
+
+First inspect the exact key-free body that would leave your machine:
+
+```bash
+reporipple /path/to/repository --base main --explain-preview
+```
+
+The preview does not read an API key and does not make a network request. When you are satisfied with the payload, provide the key through the environment and explicitly request an explanation:
+
+```bash
+export OPENROUTER_API_KEY="your-key"
+reporipple /path/to/repository --base main --explain
+```
+
+There is no command-line key option and RepoRipple does not read a key from a file. The integration uses only the Python standard library and applies all of these controls to every request:
+
+- Repository names, paths, source, diffs, scanner-warning text, and user identifiers are not transmitted.
+- Files and risk signals become opaque evidence IDs such as `E001`; returned IDs are schema-validated and mapped back to labels locally.
+- The response must satisfy a strict JSON Schema, and unknown evidence IDs or extra fields are rejected.
+- OpenRouter routing requires zero data retention (`zdr: true`), denies data collection, and selects only providers that support every requested parameter.
+- Provider prices are capped at $1 per million input tokens and $4 per million output tokens, with a 450-token response limit.
+- Requests have a 10-second timeout and retry at most once for a transient failure.
+- Token usage and reported request cost are included in Markdown and JSON output.
+
+The default model is `openai/gpt-5-mini`. Privacy filters may reduce provider availability, and the request fails closed when no eligible provider satisfies the structured-output, privacy, or price requirements. OpenRouter's ZDR policy prevents eligible providers from retaining prompts and responses after processing; it does not mean the request stays on your machine. See OpenRouter's [structured outputs](https://openrouter.ai/docs/guides/features/structured-outputs), [ZDR controls](https://openrouter.ai/docs/guides/get-started/sovereign-ai), and [provider price ceilings](https://openrouter.ai/blog/tutorials/how-to-get-the-lowest-cost-llm-inference-on-openrouter/) documentation.
+
 ## CLI reference
 
 ```text
@@ -143,12 +175,16 @@ reporipple [PATH]
   --format markdown|json
   --output FILE
   --fail-on medium|high
+  --explain             request an optional privacy-filtered OpenRouter explanation
+  --explain-preview     show the exact sanitized request without sending it
 
 reporipple mcp
   --root PATH            restrict tool access to PATH and its descendants
 ```
 
 When no base or explicit path is supplied, RepoRipple analyzes staged, unstaged, and untracked files. On a clean checkout it falls back to the latest commit.
+
+`--explain` and `--explain-preview` are mutually exclusive. With JSON output, either flag returns a wrapper containing `deterministic_report` plus the explanation or preview; ordinary JSON output is unchanged.
 
 ## Supported analysis
 
@@ -161,6 +197,7 @@ When no base or explicit path is supplied, RepoRipple analyzes staged, unstaged,
 | Markdown and JSON reports | Supported |
 | Risk-based CI exit code | Supported |
 | MCP tools for coding agents | Supported |
+| Privacy-filtered OpenRouter explanations | Optional |
 | Monorepo package aliases | Planned |
 | Go, Rust, and Java imports | Planned |
 | GitHub pull-request reports and comments | Supported |
@@ -177,10 +214,12 @@ uv build
 
 ## Privacy and security
 
-RepoRipple runs locally and does not transmit repository contents. It invokes Git using
-argument arrays rather than a shell and reads only supported, non-symlinked source files
-outside common generated and dependency directories. The MCP server constrains every
-repository request to its configured `--root` and exposes read-only tools only.
+RepoRipple's deterministic analysis runs locally and does not transmit repository contents. It
+invokes Git using argument arrays rather than a shell and reads only supported, non-symlinked
+source files outside common generated and dependency directories. The MCP server constrains every
+repository request to its configured `--root` and exposes read-only tools only. Network access
+occurs only when `--explain` is present; `--explain-preview` remains fully local so the outbound
+body can be audited first.
 
 ## License
 

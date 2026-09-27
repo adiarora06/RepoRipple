@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 from reporipple.analysis import analyze_impact
+from reporipple.explain import (
+    ExplanationError,
+    build_evidence_bundle,
+    build_openrouter_request,
+    explain_report,
+    explanation_to_dict,
+    render_explanation_markdown,
+    render_preview_markdown,
+)
 from reporipple.git import GitError, changed_files
 from reporipple.report import render_json, render_markdown
 from reporipple.scanner import scan_repository
@@ -38,6 +48,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exit with status 2 when the report reaches this risk level",
     )
     parser.add_argument("--output", type=Path, help="Write the report to a file instead of stdout")
+    explanation = parser.add_mutually_exclusive_group()
+    explanation.add_argument(
+        "--explain",
+        action="store_true",
+        help="Append an opt-in, privacy-filtered OpenRouter explanation",
+    )
+    explanation.add_argument(
+        "--explain-preview",
+        action="store_true",
+        help="Show the exact sanitized OpenRouter request without sending it",
+    )
     return parser
 
 
@@ -82,6 +103,56 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     rendered = render_json(report) if args.format == "json" else render_markdown(report)
+    if args.explain_preview:
+        bundle = build_evidence_bundle(report)
+        request_payload = build_openrouter_request(bundle)
+        if args.format == "json":
+            rendered = json.dumps(
+                {
+                    "deterministic_report": report.to_dict(),
+                    "openrouter_preview": {
+                        "request_sent": False,
+                        "request": request_payload,
+                    },
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        else:
+            rendered = rendered.rstrip() + "\n\n" + render_preview_markdown(request_payload)
+    elif args.explain:
+        try:
+            bundle, explanation = explain_report(report)
+        except ExplanationError as exc:
+            print(
+                f"warning: optional OpenRouter explanation unavailable: {exc}; "
+                "the deterministic report is unchanged",
+                file=sys.stderr,
+            )
+        except Exception:
+            print(
+                "warning: optional OpenRouter explanation failed unexpectedly; "
+                "the deterministic report is unchanged",
+                file=sys.stderr,
+            )
+        else:
+            if args.format == "json":
+                rendered = json.dumps(
+                    {
+                        "deterministic_report": report.to_dict(),
+                        "openrouter_explanation": explanation_to_dict(
+                            explanation, bundle.local_labels
+                        ),
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            else:
+                rendered = (
+                    rendered.rstrip()
+                    + "\n\n"
+                    + render_explanation_markdown(explanation, bundle.local_labels)
+                )
     if args.output:
         args.output.write_text(rendered, encoding="utf-8")
     else:
