@@ -1,5 +1,7 @@
 # RepoRipple
 
+<!-- mcp-name: io.github.adiarora06/reporipple -->
+
 **Know what a code change can break before you merge it.**
 
 RepoRipple is a local-first change-impact analyzer for engineers and coding agents. It builds a lightweight dependency graph from a repository, reads the current Git diff, traces reverse dependencies, recommends relevant tests, and emits a review-ready Markdown or JSON report.
@@ -60,15 +62,15 @@ jobs:
   impact:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
       - id: reporipple
-        uses: adiarora06/RepoRipple@00d64bd0763d812e682d90756b88fd82bb7157e7
+        uses: adiarora06/RepoRipple@24e4e431c241b9adb76e8735640a53ab8d1c3248
         with:
           base: ${{ github.event.pull_request.base.sha }}
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: reporipple-impact
           path: |
@@ -105,6 +107,9 @@ The server provides `forecast_change` for proposed edits and `analyze_worktree` 
 actual Git changes. See the
 [MCP setup guide](https://github.com/adiarora06/RepoRipple/blob/main/docs/mcp.md) for
 client-specific commands and configuration.
+
+The [architecture guide](docs/architecture.md) explains how the CLI, GitHub Action,
+MCP server, and optional explanation layer share one deterministic analysis engine.
 
 ## Example report
 
@@ -159,11 +164,18 @@ There is no command-line key option and RepoRipple does not read a key from a fi
 - Files and risk signals become opaque evidence IDs such as `E001`; returned IDs are schema-validated and mapped back to labels locally.
 - The response must satisfy a strict JSON Schema, and unknown evidence IDs or extra fields are rejected.
 - OpenRouter routing requires zero data retention (`zdr: true`), denies data collection, and selects only providers that support every requested parameter.
-- Provider prices are capped at $1 per million input tokens and $4 per million output tokens, with a 450-token response limit.
-- Requests have a 10-second timeout and retry at most once for a transient failure.
+- Provider prices are capped at $0.25 per million input tokens and $1 per million output tokens, with a 450-token response limit.
+- Requests have a 10-second timeout and retry at most once after an explicit retryable HTTP response; ambiguous network timeouts are not retried.
 - Token usage and reported request cost are included in Markdown and JSON output.
 
-The default model is `openai/gpt-5-mini`. Privacy filters may reduce provider availability, and the request fails closed when no eligible provider satisfies the structured-output, privacy, or price requirements. OpenRouter's ZDR policy prevents eligible providers from retaining prompts and responses after processing; it does not mean the request stays on your machine. See OpenRouter's [structured outputs](https://openrouter.ai/docs/guides/features/structured-outputs), [ZDR controls](https://openrouter.ai/docs/guides/get-started/sovereign-ai), and [provider price ceilings](https://openrouter.ai/blog/tutorials/how-to-get-the-lowest-cost-llm-inference-on-openrouter/) documentation.
+The pinned default model is `openai/gpt-6-luna`. Override it with `--explain-model` or
+`REPORIPPLE_OPENROUTER_MODEL`; privacy, schema, and price controls remain mandatory. Privacy
+filters may reduce provider availability, and the request fails closed when no eligible provider
+satisfies them. OpenRouter's ZDR policy prevents eligible providers from retaining prompts and
+responses after processing; it does not mean the request stays on your machine. See OpenRouter's
+[structured outputs](https://openrouter.ai/docs/guides/features/structured-outputs),
+[ZDR controls](https://openrouter.ai/docs/guides/features/zdr), and
+[provider routing controls](https://openrouter.ai/docs/guides/routing/provider-selection).
 
 ## CLI reference
 
@@ -177,6 +189,7 @@ reporipple [PATH]
   --fail-on medium|high
   --explain             request an optional privacy-filtered OpenRouter explanation
   --explain-preview     show the exact sanitized request without sending it
+  --explain-model NAME  use a pinned provider/model slug for either explanation mode
 
 reporipple mcp
   --root PATH            restrict tool access to PATH and its descendants

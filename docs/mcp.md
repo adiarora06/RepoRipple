@@ -175,10 +175,10 @@ For a server whose allowed root contains several repositories, pass the tool's
 The root boundary is enforced by RepoRipple even when an MCP client ignores tool
 annotations. Give each agent the narrowest useful root.
 
-Client configuration references: [Codex MCP](https://developers.openai.com/learn/docs-mcp),
+Client configuration references: [Codex MCP](https://developers.openai.com/codex/extend/mcp),
 [OpenCode MCP](https://opencode.ai/v2/docs/mcp-servers),
 [Cursor MCP](https://docs.cursor.com/context/model-context-protocol),
-[Claude Code MCP](https://code.claude.com/docs/en/mcp-quickstart), and
+[Claude Code MCP](https://code.claude.com/docs/en/mcp), and
 [VS Code MCP](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
 
 ## Troubleshooting
