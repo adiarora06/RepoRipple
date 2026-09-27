@@ -59,6 +59,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show the exact sanitized OpenRouter request without sending it",
     )
+    parser.add_argument(
+        "--explain-model",
+        help=(
+            "Pinned OpenRouter provider/model slug; valid only with --explain or "
+            "--explain-preview"
+        ),
+    )
     return parser
 
 
@@ -86,6 +93,9 @@ def main(argv: list[str] | None = None) -> int:
         return _run_mcp(raw_args[1:])
 
     args = build_parser().parse_args(raw_args)
+    if args.explain_model and not (args.explain or args.explain_preview):
+        print("error: --explain-model requires --explain or --explain-preview", file=sys.stderr)
+        return 1
     root = Path(args.path).resolve()
     if not root.is_dir():
         print(f"error: repository path does not exist: {root}", file=sys.stderr)
@@ -105,7 +115,11 @@ def main(argv: list[str] | None = None) -> int:
     rendered = render_json(report) if args.format == "json" else render_markdown(report)
     if args.explain_preview:
         bundle = build_evidence_bundle(report)
-        request_payload = build_openrouter_request(bundle)
+        try:
+            request_payload = build_openrouter_request(bundle, model=args.explain_model)
+        except ExplanationError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
         if args.format == "json":
             rendered = json.dumps(
                 {
@@ -122,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
             rendered = rendered.rstrip() + "\n\n" + render_preview_markdown(request_payload)
     elif args.explain:
         try:
-            bundle, explanation = explain_report(report)
+            bundle, explanation = explain_report(report, model=args.explain_model)
         except ExplanationError as exc:
             print(
                 f"warning: optional OpenRouter explanation unavailable: {exc}; "

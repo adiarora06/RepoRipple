@@ -5,6 +5,7 @@ from __future__ import annotations
 import http.client
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -16,12 +17,14 @@ from typing import Any
 from reporipple.models import ImpactReport
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_MODEL = "openai/gpt-5-mini"
+DEFAULT_OPENROUTER_MODEL = "openai/gpt-6-luna"
+MODEL_PATTERN = re.compile(r"^[A-Za-z0-9._:-]+/[A-Za-z0-9._:-]+$")
 REQUEST_TIMEOUT_SECONDS = 10.0
 RETRY_DELAY_SECONDS = 0.25
+MAX_RETRY_DELAY_SECONDS = 2.0
 MAX_RETRIES = 1
-MAX_PROMPT_PRICE_PER_MILLION = 1.0
-MAX_COMPLETION_PRICE_PER_MILLION = 4.0
+MAX_PROMPT_PRICE_PER_MILLION = 0.25
+MAX_COMPLETION_PRICE_PER_MILLION = 1.0
 MAX_COMPLETION_TOKENS = 450
 MAX_RESPONSE_BYTES = 256 * 1024
 RETRYABLE_HTTP_CODES = {408, 429, 500, 502, 503, 504}
@@ -174,10 +177,25 @@ def build_evidence_bundle(report: ImpactReport) -> EvidenceBundle:
     return EvidenceBundle(payload=payload, local_labels=local_labels)
 
 
-def build_openrouter_request(bundle: EvidenceBundle) -> dict[str, Any]:
+def resolve_model(requested: str | None = None) -> str:
+    """Resolve a pinned OpenRouter model without accepting arbitrary request text."""
+    candidate = (
+        requested
+        or os.environ.get("REPORIPPLE_OPENROUTER_MODEL")
+        or DEFAULT_OPENROUTER_MODEL
+    )
+    candidate = candidate.strip()
+    if len(candidate) > 200 or not MODEL_PATTERN.fullmatch(candidate):
+        raise ExplanationError("OpenRouter model must be a provider/model slug")
+    return candidate
+
+
+def build_openrouter_request(
+    bundle: EvidenceBundle, *, model: str | None = None
+) -> dict[str, Any]:
     """Build the exact request body used for both preview and live explanation."""
     return {
-        "model": OPENROUTER_MODEL,
+        "model": resolve_model(model),
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
@@ -197,6 +215,7 @@ def build_openrouter_request(bundle: EvidenceBundle) -> dict[str, Any]:
             "zdr": True,
             "data_collection": "deny",
             "require_parameters": True,
+            "sort": "price",
             "max_price": {
                 "prompt": MAX_PROMPT_PRICE_PER_MILLION,
                 "completion": MAX_COMPLETION_PRICE_PER_MILLION,
@@ -211,6 +230,7 @@ def build_openrouter_request(bundle: EvidenceBundle) -> dict[str, Any]:
 def explain_report(
     report: ImpactReport,
     *,
+    model: str | None = None,
     opener: Callable[..., Any] = urllib.request.urlopen,
     sleep: Callable[[float], None] = time.sleep,
 ) -> tuple[EvidenceBundle, ExplanationResult]:
@@ -220,14 +240,18 @@ def explain_report(
         raise ExplanationError("OPENROUTER_API_KEY is not set")
 
     bundle = build_evidence_bundle(report)
-    request_payload = build_openrouter_request(bundle)
+    request_payload = build_openrouter_request(bundle, model=model)
     response_payload = _post_openrouter(
         request_payload,
         api_key,
         opener=opener,
         sleep=sleep,
     )
-    result = _parse_response(response_payload, set(bundle.local_labels))
+    result = _parse_response(
+        response_payload,
+        set(bundle.local_labels),
+        fallback_model=request_payload["model"],
+    )
     return bundle, result
 
 
@@ -322,13 +346,10 @@ def _post_openrouter(
                 return decoded
         except urllib.error.HTTPError as exc:
             if exc.code in RETRYABLE_HTTP_CODES and attempt < MAX_RETRIES:
-                sleep(RETRY_DELAY_SECONDS)
+                sleep(_retry_delay(exc))
                 continue
             raise ExplanationError(f"OpenRouter request failed with HTTP {exc.code}") from exc
         except (TimeoutError, urllib.error.URLError, http.client.HTTPException, OSError) as exc:
-            if attempt < MAX_RETRIES:
-                sleep(RETRY_DELAY_SECONDS)
-                continue
             raise ExplanationError("OpenRouter request timed out or was unavailable") from exc
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ExplanationError("OpenRouter returned invalid JSON") from exc
@@ -336,7 +357,14 @@ def _post_openrouter(
     raise ExplanationError("OpenRouter request failed")
 
 
-def _parse_response(payload: Mapping[str, Any], allowed_evidence: set[str]) -> ExplanationResult:
+def _parse_response(
+    payload: Mapping[str, Any],
+    allowed_evidence: set[str],
+    *,
+    fallback_model: str,
+) -> ExplanationResult:
+    if "error" in payload:
+        raise ExplanationError("OpenRouter returned an error response")
     try:
         choices = payload["choices"]
         content = choices[0]["message"]["content"]
@@ -368,9 +396,9 @@ def _parse_response(payload: Mapping[str, Any], allowed_evidence: set[str]) -> E
         total_tokens=_optional_int(usage_payload.get("total_tokens")),
         cost_usd=_optional_float(usage_payload.get("cost")),
     )
-    model = payload.get("model", OPENROUTER_MODEL)
+    model = payload.get("model", fallback_model)
     if not isinstance(model, str) or not model.strip():
-        model = OPENROUTER_MODEL
+        model = fallback_model
     return ExplanationResult(
         model=model.strip(),
         summary=summary,
@@ -422,6 +450,16 @@ def _optional_float(value: Any) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
         return None
     return float(value)
+
+
+def _retry_delay(exc: urllib.error.HTTPError) -> float:
+    """Honor a small numeric Retry-After value without allowing long CLI stalls."""
+    raw = exc.headers.get("Retry-After") if exc.headers else None
+    try:
+        requested = float(raw) if raw is not None else RETRY_DELAY_SECONDS
+    except ValueError:
+        requested = RETRY_DELAY_SECONDS
+    return max(0.0, min(requested, MAX_RETRY_DELAY_SECONDS))
 
 
 def _file_type(path: str) -> str:

@@ -102,6 +102,7 @@ def test_request_enforces_privacy_schema_and_price_controls():
         "zdr": True,
         "data_collection": "deny",
         "require_parameters": True,
+        "sort": "price",
         "max_price": {
             "prompt": MAX_PROMPT_PRICE_PER_MILLION,
             "completion": MAX_COMPLETION_PRICE_PER_MILLION,
@@ -165,13 +166,35 @@ def test_transient_failure_retries_only_once(monkeypatch):
     def opener(request, *, timeout):
         calls.append((request, timeout))
         if len(calls) == 1:
-            raise urllib.error.URLError("temporary outage")
+            raise urllib.error.HTTPError(
+                request.full_url,
+                503,
+                "temporary outage",
+                {"Retry-After": "0.5"},
+                None,
+            )
         return FakeResponse(api_response())
 
     explain_report(private_report(), opener=opener, sleep=delays.append)
 
     assert len(calls) == 2
-    assert delays == [0.25]
+    assert delays == [0.5]
+
+
+def test_ambiguous_network_failure_is_not_retried(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-secret-key")
+    calls = []
+    delays = []
+
+    def opener(request, *, timeout):
+        calls.append((request, timeout))
+        raise urllib.error.URLError(TimeoutError("unknown request outcome"))
+
+    with pytest.raises(ExplanationError, match="timed out or was unavailable"):
+        explain_report(private_report(), opener=opener, sleep=delays.append)
+
+    assert len(calls) == 1
+    assert delays == []
 
 
 def test_authentication_failure_is_not_retried(monkeypatch):
@@ -244,7 +267,7 @@ def test_unexpected_ai_failure_never_changes_core_exit(monkeypatch, tmp_path, ca
     source.parent.mkdir(parents=True)
     source.write_text("VALUE = 1\n", encoding="utf-8")
 
-    def fail_unexpectedly(report):
+    def fail_unexpectedly(report, **kwargs):
         raise RuntimeError("internal secret that should not be printed")
 
     monkeypatch.setattr("reporipple.cli.explain_report", fail_unexpectedly)
@@ -256,6 +279,34 @@ def test_unexpected_ai_failure_never_changes_core_exit(monkeypatch, tmp_path, ca
     assert "# RepoRipple impact report" in captured.out
     assert "optional OpenRouter explanation failed unexpectedly" in captured.err
     assert "internal secret" not in captured.err
+
+
+def test_model_override_is_explicit_and_validated(monkeypatch, tmp_path, capsys):
+    source = tmp_path / "src" / "app.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("VALUE = 1\n", encoding="utf-8")
+    monkeypatch.setenv("REPORIPPLE_OPENROUTER_MODEL", "openai/gpt-6-luna")
+
+    assert (
+        main(
+            [
+                str(tmp_path),
+                "--changed",
+                "src/app.py",
+                "--explain-preview",
+                "--explain-model",
+                "openai/gpt-6-luna",
+                "--format",
+                "json",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["openrouter_preview"]["request"]["model"] == "openai/gpt-6-luna"
+
+    assert main([str(tmp_path), "--explain-model", "invalid model"]) == 1
+    assert "requires --explain" in capsys.readouterr().err
 
 
 def test_preview_never_requires_a_key_or_network(monkeypatch, tmp_path, capsys):
