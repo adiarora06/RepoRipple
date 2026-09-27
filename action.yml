@@ -1,0 +1,116 @@
+name: RepoRipple impact analysis
+description: Trace the blast radius of a pull request and produce Markdown and JSON reports.
+author: Adi Arora
+
+branding:
+  icon: git-pull-request
+  color: blue
+
+inputs:
+  path:
+    description: Repository path to analyze.
+    required: false
+    default: .
+  base:
+    description: Git revision to compare with HEAD. Checkout history must contain this revision.
+    required: false
+    default: ""
+  max-depth:
+    description: Maximum reverse-dependency traversal depth.
+    required: false
+    default: "4"
+  fail-on:
+    description: Optional risk threshold that fails the step (medium or high).
+    required: false
+    default: ""
+  reports-directory:
+    description: Directory in which impact.md and impact.json are written.
+    required: false
+    default: reporipple-reports
+
+outputs:
+  markdown-report:
+    description: Absolute path to the generated Markdown report.
+    value: ${{ steps.analyze.outputs.markdown-report }}
+  json-report:
+    description: Absolute path to the generated JSON report.
+    value: ${{ steps.analyze.outputs.json-report }}
+  risk-level:
+    description: Deterministic low, medium, or high risk classification.
+    value: ${{ steps.analyze.outputs.risk-level }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      with:
+        python-version: "3.12"
+        cache: pip
+
+    - name: Install RepoRipple
+      shell: bash
+      env:
+        REPORIPPLE_ACTION_PATH: ${{ github.action_path }}
+      run: python -m pip install --disable-pip-version-check "$REPORIPPLE_ACTION_PATH"
+
+    - name: Analyze repository impact
+      id: analyze
+      shell: bash
+      env:
+        REPORIPPLE_BASE: ${{ inputs.base }}
+        REPORIPPLE_FAIL_ON: ${{ inputs.fail-on }}
+        REPORIPPLE_MAX_DEPTH: ${{ inputs.max-depth }}
+        REPORIPPLE_PATH: ${{ inputs.path }}
+        REPORIPPLE_REPORTS_DIRECTORY: ${{ inputs.reports-directory }}
+      run: |
+        set -euo pipefail
+
+        if [[ ! "$REPORIPPLE_MAX_DEPTH" =~ ^[1-9][0-9]*$ ]]; then
+          echo "::error title=Invalid max-depth::max-depth must be a positive integer"
+          exit 1
+        fi
+        if [[ -n "$REPORIPPLE_FAIL_ON" && "$REPORIPPLE_FAIL_ON" != "medium" && "$REPORIPPLE_FAIL_ON" != "high" ]]; then
+          echo "::error title=Invalid fail-on::fail-on must be medium, high, or empty"
+          exit 1
+        fi
+        if [[ -z "$REPORIPPLE_REPORTS_DIRECTORY" || "$REPORIPPLE_REPORTS_DIRECTORY" == *$'\n'* || "$REPORIPPLE_REPORTS_DIRECTORY" == *$'\r'* ]]; then
+          echo "::error title=Invalid reports-directory::reports-directory must be a non-empty, single-line path"
+          exit 1
+        fi
+
+        mkdir -p "$REPORIPPLE_REPORTS_DIRECTORY"
+        reports_directory="$(cd "$REPORIPPLE_REPORTS_DIRECTORY" && pwd -P)"
+        markdown_report="$reports_directory/impact.md"
+        json_report="$reports_directory/impact.json"
+
+        command=(reporipple "$REPORIPPLE_PATH" --max-depth "$REPORIPPLE_MAX_DEPTH")
+        if [[ -n "$REPORIPPLE_BASE" ]]; then
+          command+=(--base "$REPORIPPLE_BASE")
+        fi
+
+        "${command[@]}" --format markdown --output "$markdown_report"
+        "${command[@]}" --format json --output "$json_report"
+
+        risk_level="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["risk_level"])' "$json_report")"
+        if [[ "$risk_level" != "low" && "$risk_level" != "medium" && "$risk_level" != "high" ]]; then
+          echo "::error title=Invalid report::RepoRipple returned an unknown risk level"
+          exit 1
+        fi
+
+        {
+          echo "markdown-report=$markdown_report"
+          echo "json-report=$json_report"
+          echo "risk-level=$risk_level"
+        } >> "$GITHUB_OUTPUT"
+
+        if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+          cat "$markdown_report" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        case "$risk_level:$REPORIPPLE_FAIL_ON" in
+          high:medium|high:high|medium:medium)
+            echo "::error title=RepoRipple risk threshold reached::Risk is $risk_level; threshold is $REPORIPPLE_FAIL_ON"
+            exit 2
+            ;;
+        esac

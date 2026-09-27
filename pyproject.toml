@@ -4,13 +4,25 @@ build-backend = "hatchling.build"
 
 [project]
 name = "reporipple"
-version = "0.1.0"
+version = "0.2.0"
 description = "Deterministic change-impact analysis for engineers and coding agents."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Adi Arora" }]
-keywords = ["developer-tools", "git", "static-analysis", "code-review", "ai-agents"]
+keywords = [
+  "developer-tools",
+  "git",
+  "static-analysis",
+  "code-review",
+  "ai-agents",
+  "github-actions",
+  "mcp",
+]
+dependencies = [
+  "mcp>=2.0,<3",
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
@@ -32,7 +44,10 @@ reporipple = "reporipple.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/adiarora06/RepoRipple"
+Documentation = "https://github.com/adiarora06/RepoRipple#readme"
 Issues = "https://github.com/adiarora06/RepoRipple/issues"
+Source = "https://github.com/adiarora06/RepoRipple"
+Changelog = "https://github.com/adiarora06/RepoRipple/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/reporipple"]

@@ -1,0 +1,100 @@
+name: RepoRipple pull request
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: reporipple-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze change impact
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the pull request
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Generate RepoRipple reports
+        id: reporipple
+        uses: ./
+        with:
+          base: ${{ github.event.pull_request.base.sha }}
+          reports-directory: reporipple-reports
+
+      - name: Upload impact reports
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: reporipple-impact-${{ github.event.pull_request.number }}
+          path: |
+            ${{ steps.reporipple.outputs.markdown-report }}
+            ${{ steps.reporipple.outputs.json-report }}
+          if-no-files-found: error
+          retention-days: 14
+
+  comment:
+    name: Update pull-request comment
+    needs: analyze
+    if: >-
+      needs.analyze.result == 'success' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Download impact report
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: reporipple-impact-${{ github.event.pull_request.number }}
+          path: reporipple-comment
+
+      - name: Create or update RepoRipple comment
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
+        env:
+          REPORIPPLE_REPORT_PATH: reporipple-comment/impact.md
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- reporipple-impact-report -->';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            let report = fs.readFileSync(process.env.REPORIPPLE_REPORT_PATH, 'utf8');
+
+            // GitHub comments are limited to 65,536 characters. Preserve room for
+            // the stable marker and a link to the complete workflow artifact.
+            const maxReportLength = 60000;
+            if (report.length > maxReportLength) {
+              report = `${report.slice(0, maxReportLength)}\n\n_Report truncated. [Download the complete report](${runUrl})._\n`;
+            }
+            const body = `${marker}\n${report}\n---\n[Workflow run and JSON artifact](${runUrl})`;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo,
+              issue_number,
+              per_page: 100,
+            });
+            const existing = comments.find((comment) =>
+              comment.user?.type === 'Bot' && comment.body?.startsWith(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                ...context.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number,
+                body,
+              });
+            }

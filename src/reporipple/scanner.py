@@ -19,9 +19,14 @@ JS_IMPORT_PATTERN = re.compile(
 
 def discover_source_files(root: Path) -> set[str]:
     """Return normalized source paths while excluding generated and dependency directories."""
+    root = root.resolve()
     files: set[str] = set()
     for path in root.rglob("*"):
-        if not path.is_file() or path.suffix.lower() not in SOURCE_EXTENSIONS:
+        if (
+            path.is_symlink()
+            or not path.is_file()
+            or path.suffix.lower() not in SOURCE_EXTENSIONS
+        ):
             continue
         relative = path.relative_to(root)
         if any(part in IGNORED_DIRECTORIES for part in relative.parts):
