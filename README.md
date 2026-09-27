@@ -39,6 +39,49 @@ reporipple /path/to/repository --base main --format json --output impact.json
 reporipple . --base origin/main --fail-on high
 ```
 
+## GitHub Action
+
+Add RepoRipple to a pull-request workflow to create Markdown and JSON impact reports and append
+the Markdown report to the GitHub job summary:
+
+```yaml
+name: RepoRipple
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  impact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: reporipple
+        uses: adiarora06/RepoRipple@00d64bd0763d812e682d90756b88fd82bb7157e7
+        with:
+          base: ${{ github.event.pull_request.base.sha }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: reporipple-impact
+          path: |
+            ${{ steps.reporipple.outputs.markdown-report }}
+            ${{ steps.reporipple.outputs.json-report }}
+```
+
+The Action accepts `path`, `base`, `max-depth`, `fail-on`, and `reports-directory`. It outputs
+`markdown-report`, `json-report`, and `risk-level`. For reproducible builds, pin RepoRipple to a
+release commit SHA and use `fetch-depth: 0` so the requested base revision is available.
+
+This repository's own [pull-request workflow](.github/workflows/reporipple.yml) demonstrates a
+fork-safe commenting design. Analysis runs with read-only contents access. A separate job updates
+one stable RepoRipple comment only for branches in the same repository; fork pull requests keep
+their report in the job summary and downloadable artifact without receiving a write-capable token.
+
 ## Example report
 
 ```markdown
@@ -95,7 +138,7 @@ When no base or explicit path is supplied, RepoRipple analyzes staged, unstaged,
 | Risk-based CI exit code | Supported |
 | Monorepo package aliases | Planned |
 | Go, Rust, and Java imports | Planned |
-| GitHub pull-request comments | Planned |
+| GitHub pull-request reports and comments | Supported |
 
 ## Development
 

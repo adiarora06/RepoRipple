@@ -42,6 +42,7 @@ def test_pr_workflow_keeps_analysis_unprivileged_and_skips_fork_comments():
     assert "pull_request_target" not in document
     assert "pull-requests: write" not in analyze_job
     assert "contents: read" in analyze_job
+    assert "persist-credentials: false" in analyze_job
     assert "github.event.pull_request.head.repo.full_name == github.repository" in comment_job
     assert "pull-requests: write" in comment_job
     assert "startsWith(marker)" in comment_job
