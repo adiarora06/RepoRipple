@@ -41,8 +41,30 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_mcp_parser() -> argparse.ArgumentParser:
+    """Build the parser for the local MCP server."""
+    parser = argparse.ArgumentParser(
+        prog="reporipple mcp",
+        description="Expose RepoRipple's read-only analysis tools over MCP stdio.",
+    )
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=Path.cwd(),
+        help=(
+            "Limit repository access to this directory and its descendants "
+            "(default: current directory)"
+        ),
+    )
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    if raw_args and raw_args[0] == "mcp":
+        return _run_mcp(raw_args[1:])
+
+    args = build_parser().parse_args(raw_args)
     root = Path(args.path).resolve()
     if not root.is_dir():
         print(f"error: repository path does not exist: {root}", file=sys.stderr)
@@ -67,6 +89,26 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.fail_on and RISK_ORDER[report.risk_level] >= RISK_ORDER[args.fail_on]:
         return 2
+    return 0
+
+
+def _run_mcp(argv: list[str]) -> int:
+    args = build_mcp_parser().parse_args(argv)
+    root = args.root.expanduser().resolve()
+    if not root.is_dir():
+        print(f"error: allowed root does not exist: {root}", file=sys.stderr)
+        return 1
+
+    try:
+        from reporipple.mcp_server import run_server
+    except (ImportError, ModuleNotFoundError):
+        print(
+            "error: MCP runtime is unavailable; reinstall RepoRipple and its dependencies",
+            file=sys.stderr,
+        )
+        return 1
+
+    run_server(root)
     return 0
 
 

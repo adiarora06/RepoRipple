@@ -11,6 +11,9 @@ requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Adi Arora" }]
 keywords = ["developer-tools", "git", "static-analysis", "code-review", "ai-agents"]
+dependencies = [
+  "mcp>=2.0,<3",
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",

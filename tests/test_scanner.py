@@ -51,3 +51,15 @@ def test_records_python_parse_warnings(tmp_path):
 
     assert graph.warnings
     assert "broken.py" in graph.warnings[0]
+
+
+def test_does_not_read_source_files_through_symlinks(tmp_path):
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    outside = tmp_path / "outside.py"
+    outside.write_text("value = 1\n", encoding="utf-8")
+    (repository / "linked.py").symlink_to(outside)
+
+    graph = scan_repository(repository)
+
+    assert "linked.py" not in graph.files

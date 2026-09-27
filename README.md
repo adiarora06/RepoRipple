@@ -82,6 +82,27 @@ fork-safe commenting design. Analysis runs with read-only contents access. A sep
 one stable RepoRipple comment only for branches in the same repository; fork pull requests keep
 their report in the job summary and downloadable artifact without receiving a write-capable token.
 
+## Coding-agent tools (MCP)
+
+RepoRipple can expose the same deterministic analysis to Codex, OpenCode, Cursor,
+Claude Code, and VS Code over a local, read-only MCP server. From a source checkout:
+
+```bash
+uv run reporipple mcp --root /path/to/allowed/workspace
+```
+
+After the package is published to PyPI, agent configurations can launch it without a
+clone:
+
+```bash
+uvx reporipple mcp --root /path/to/allowed/workspace
+```
+
+The server provides `forecast_change` for proposed edits and `analyze_worktree` for
+actual Git changes. See the
+[MCP setup guide](https://github.com/adiarora06/RepoRipple/blob/main/docs/mcp.md) for
+client-specific commands and configuration.
+
 ## Example report
 
 ```markdown
@@ -122,6 +143,9 @@ reporipple [PATH]
   --format markdown|json
   --output FILE
   --fail-on medium|high
+
+reporipple mcp
+  --root PATH            restrict tool access to PATH and its descendants
 ```
 
 When no base or explicit path is supplied, RepoRipple analyzes staged, unstaged, and untracked files. On a clean checkout it falls back to the latest commit.
@@ -136,6 +160,7 @@ When no base or explicit path is supplied, RepoRipple analyzes staged, unstaged,
 | Test-file recommendations | Supported |
 | Markdown and JSON reports | Supported |
 | Risk-based CI exit code | Supported |
+| MCP tools for coding agents | Supported |
 | Monorepo package aliases | Planned |
 | Go, Rust, and Java imports | Planned |
 | GitHub pull-request reports and comments | Supported |
@@ -147,11 +172,15 @@ uv venv --python 3.12
 uv pip install --python .venv/bin/python -e ".[dev]"
 .venv/bin/ruff check .
 .venv/bin/pytest
+uv build
 ```
 
 ## Privacy and security
 
-RepoRipple runs locally and does not transmit repository contents. It invokes Git using argument arrays rather than a shell and reads only supported source files outside common generated and dependency directories.
+RepoRipple runs locally and does not transmit repository contents. It invokes Git using
+argument arrays rather than a shell and reads only supported, non-symlinked source files
+outside common generated and dependency directories. The MCP server constrains every
+repository request to its configured `--root` and exposes read-only tools only.
 
 ## License
 
