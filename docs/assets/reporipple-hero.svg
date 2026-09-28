@@ -1,0 +1,235 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">RepoRipple change-impact analysis</title>
+  <desc id="desc">A product overview showing a RepoRipple terminal report and the dependency path from a changed billing store through impacted service and checkout files to suggested tests.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.55" stop-color="#0b1627"/>
+      <stop offset="1" stop-color="#10182c"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#58e1ff"/>
+      <stop offset="1" stop-color="#8d7dff"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#58e1ff" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#8d7dff" stop-opacity="0.95"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#58e1ff" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#58e1ff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000817" flood-opacity="0.48"/>
+    </filter>
+    <filter id="softGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#637695"/>
+    </marker>
+    <clipPath id="canvasClip">
+      <rect width="1600" height="900" rx="32"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#canvasClip)">
+    <rect width="1600" height="900" fill="url(#background)"/>
+    <ellipse cx="1345" cy="102" rx="470" ry="360" fill="url(#glow)"/>
+    <ellipse cx="190" cy="876" rx="430" ry="330" fill="url(#glow)" opacity="0.42"/>
+
+    <g fill="none" stroke="#58e1ff" stroke-opacity="0.05">
+      <circle cx="1425" cy="100" r="115"/>
+      <circle cx="1425" cy="100" r="175"/>
+      <circle cx="1425" cy="100" r="235"/>
+      <circle cx="1425" cy="100" r="295"/>
+    </g>
+    <g stroke="#253652" stroke-opacity="0.28" stroke-width="1">
+      <path d="M0 78H1600M0 156H1600M0 234H1600M0 312H1600M0 390H1600M0 468H1600M0 546H1600M0 624H1600M0 702H1600M0 780H1600M0 858H1600"/>
+      <path d="M80 0V900M160 0V900M240 0V900M320 0V900M400 0V900M480 0V900M560 0V900M640 0V900M720 0V900M800 0V900M880 0V900M960 0V900M1040 0V900M1120 0V900M1200 0V900M1280 0V900M1360 0V900M1440 0V900M1520 0V900"/>
+    </g>
+
+    <!-- Brand -->
+    <g transform="translate(72 54)">
+      <circle cx="36" cy="36" r="33" fill="#101e33" stroke="#2f4464" stroke-width="2"/>
+      <circle cx="36" cy="36" r="24" fill="none" stroke="url(#brand)" stroke-width="3" stroke-opacity="0.35"/>
+      <circle cx="36" cy="36" r="15" fill="none" stroke="url(#brand)" stroke-width="3" stroke-opacity="0.66"/>
+      <circle cx="36" cy="36" r="6" fill="url(#brand)"/>
+      <path d="M42 36H66" stroke="#58e1ff" stroke-width="3" stroke-linecap="round"/>
+      <text x="88" y="31" fill="#f1f7ff" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="28" font-weight="750" letter-spacing="-0.5">RepoRipple</text>
+      <text x="88" y="57" fill="#8294b1" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" letter-spacing="1.7">CHANGE-IMPACT ANALYSIS</text>
+    </g>
+
+    <!-- Headline -->
+    <g fill="#f4f8ff" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="44" font-weight="760" letter-spacing="-1.6">
+      <text x="78" y="164">Know what a code change</text>
+      <text x="78" y="214">can break before</text>
+      <text x="78" y="264">you merge it.</text>
+    </g>
+    <text x="80" y="297" fill="#99a9c1" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="18">
+      Local-first dependency tracing for engineers and coding agents.
+    </text>
+
+    <!-- Capability chips -->
+    <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="14" font-weight="650">
+      <g transform="translate(80 324)">
+        <rect width="137" height="38" rx="19" fill="#0d2632" stroke="#1f5260"/>
+        <circle cx="21" cy="19" r="4" fill="#48dfb2"/>
+        <text x="34" y="24" fill="#b9f4e4">Deterministic</text>
+      </g>
+      <g transform="translate(229 324)">
+        <rect width="116" height="38" rx="19" fill="#131f35" stroke="#304261"/>
+        <path d="M18 22l4-8 4 8z" fill="#58e1ff"/>
+        <text x="36" y="24" fill="#c2d1e8">Local-first</text>
+      </g>
+      <g transform="translate(357 324)">
+        <rect width="131" height="38" rx="19" fill="#181c39" stroke="#413d74"/>
+        <rect x="17" y="14" width="9" height="10" rx="2" fill="#9b8cff"/>
+        <text x="36" y="24" fill="#d2cbff">Read-only MCP</text>
+      </g>
+    </g>
+
+    <!-- Terminal card -->
+    <g filter="url(#shadow)">
+      <rect x="72" y="386" width="610" height="446" rx="19" fill="#09121f" stroke="#273a57" stroke-width="1.5"/>
+      <rect x="72" y="386" width="610" height="58" rx="19" fill="#101d2e"/>
+      <path d="M72 425V832" stroke="none"/>
+      <rect x="72" y="425" width="610" height="19" fill="#101d2e"/>
+      <line x1="72" y1="444" x2="682" y2="444" stroke="#273a57"/>
+      <circle cx="104" cy="415" r="6" fill="#ff6b75"/>
+      <circle cx="126" cy="415" r="6" fill="#ffc857"/>
+      <circle cx="148" cy="415" r="6" fill="#4bd69b"/>
+      <text x="377" y="421" text-anchor="middle" fill="#70829e" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">impact-report.md</text>
+    </g>
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+      <text x="102" y="485" fill="#4bd69b" font-size="16">$</text>
+      <text x="120" y="485" fill="#d9e5f7" font-size="16">reporipple . --base main</text>
+      <line x1="102" y1="512" x2="652" y2="512" stroke="#1d304a"/>
+      <text x="102" y="550" fill="#8092ae" font-size="12" font-weight="700" letter-spacing="1.3">REPORIPPLE IMPACT REPORT</text>
+      <g transform="translate(102 570)">
+        <rect width="82" height="29" rx="7" fill="#3a201f" stroke="#80413c"/>
+        <circle cx="15" cy="14.5" r="4" fill="#ff8a67"/>
+        <text x="28" y="19" fill="#ffb09a" font-size="13" font-weight="700">HIGH</text>
+      </g>
+      <text x="199" y="591" fill="#91a2ba" font-size="14">84 files</text>
+      <circle cx="272" cy="586" r="2" fill="#40516c"/>
+      <text x="284" y="591" fill="#91a2ba" font-size="14">137 dependency edges</text>
+
+      <text x="102" y="638" fill="#6f829e" font-size="12" font-weight="700" letter-spacing="1.4">CHANGED</text>
+      <rect x="102" y="652" width="283" height="34" rx="7" fill="#122238" stroke="#263d5e"/>
+      <text x="117" y="674" fill="#65dcff" font-size="14">src/billing/store.py</text>
+
+      <text x="102" y="720" fill="#6f829e" font-size="12" font-weight="700" letter-spacing="1.4">IMPACTED · 2</text>
+      <text x="102" y="750" fill="#c7d5e9" font-size="14">↳ src/billing/service.py</text>
+      <text x="102" y="777" fill="#c7d5e9" font-size="14">  ↳ src/api/checkout.py</text>
+
+      <g transform="translate(431 646)">
+        <rect width="220" height="145" rx="12" fill="#0d1a2b" stroke="#243854"/>
+        <text x="18" y="28" fill="#6f829e" font-size="11" font-weight="700" letter-spacing="1.2">SUGGESTED VERIFICATION</text>
+        <path d="M19 55l6 6 11-13" fill="none" stroke="#4bd69b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="47" y="62" fill="#c7d5e9" font-size="12">test_billing_service.py</text>
+        <path d="M19 91l6 6 11-13" fill="none" stroke="#4bd69b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="47" y="98" fill="#c7d5e9" font-size="12">test_checkout.py</text>
+        <line x1="18" y1="117" x2="202" y2="117" stroke="#20334e"/>
+        <text x="18" y="136" fill="#7386a4" font-size="10">deterministic · review-ready</text>
+      </g>
+    </g>
+
+    <!-- Dependency map card -->
+    <g filter="url(#shadow)">
+      <rect x="728" y="150" width="800" height="438" rx="22" fill="#0c1727" stroke="#2a3c59" stroke-width="1.5"/>
+    </g>
+    <text x="765" y="194" fill="#f1f6ff" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="20" font-weight="720">Dependency path</text>
+    <text x="1490" y="194" text-anchor="end" fill="#7185a3" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" letter-spacing="1.2">DISTANCE 2</text>
+    <line x1="764" y1="214" x2="1492" y2="214" stroke="#243751"/>
+
+    <!-- Graph edges -->
+    <g fill="none" stroke="#4a5f7d" stroke-width="2.4" marker-end="url(#arrow)">
+      <path d="M946 321 C1000 321 1015 279 1064 279"/>
+      <path d="M1236 279 C1287 279 1298 321 1347 321"/>
+      <path d="M1150 325 C1150 371 1150 385 1150 417"/>
+    </g>
+    <path d="M946 321 C1000 321 1015 279 1064 279" fill="none" stroke="url(#line)" stroke-width="2.4" opacity="0.72"/>
+    <path d="M1236 279 C1287 279 1298 321 1347 321" fill="none" stroke="url(#line)" stroke-width="2.4" opacity="0.72"/>
+    <circle cx="1150" cy="417" r="9" fill="#4bd69b" opacity="0.16" filter="url(#softGlow)"/>
+
+    <!-- Changed node -->
+    <g transform="translate(775 270)">
+      <rect width="171" height="103" rx="14" fill="#10243a" stroke="#3f90ad" stroke-width="1.5"/>
+      <rect x="15" y="15" width="66" height="22" rx="11" fill="#123747"/>
+      <circle cx="28" cy="26" r="3.5" fill="#58e1ff"/>
+      <text x="39" y="30" fill="#8beaff" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="10" font-weight="700" letter-spacing="0.8">CHANGED</text>
+      <text x="16" y="64" fill="#e1ecfa" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="650">billing/store.py</text>
+      <text x="16" y="85" fill="#7488a6" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">source</text>
+    </g>
+
+    <!-- Service node -->
+    <g transform="translate(1064 227)">
+      <rect width="172" height="103" rx="14" fill="#151e3b" stroke="#635ba7" stroke-width="1.5"/>
+      <rect x="15" y="15" width="71" height="22" rx="11" fill="#252451"/>
+      <circle cx="28" cy="26" r="3.5" fill="#9b8cff"/>
+      <text x="39" y="30" fill="#c5bcff" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="10" font-weight="700" letter-spacing="0.8">IMPACTED</text>
+      <text x="16" y="64" fill="#e1ecfa" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="650">billing/service.py</text>
+      <text x="16" y="85" fill="#7488a6" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">distance 1</text>
+    </g>
+
+    <!-- Checkout node -->
+    <g transform="translate(1347 270)">
+      <rect width="145" height="103" rx="14" fill="#151e3b" stroke="#635ba7" stroke-width="1.5"/>
+      <rect x="15" y="15" width="71" height="22" rx="11" fill="#252451"/>
+      <circle cx="28" cy="26" r="3.5" fill="#9b8cff"/>
+      <text x="39" y="30" fill="#c5bcff" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="10" font-weight="700" letter-spacing="0.8">IMPACTED</text>
+      <text x="16" y="64" fill="#e1ecfa" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="650">api/checkout.py</text>
+      <text x="16" y="85" fill="#7488a6" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">distance 2</text>
+    </g>
+
+    <!-- Test node -->
+    <g transform="translate(1049 417)">
+      <rect width="202" height="90" rx="14" fill="#102b29" stroke="#34776b" stroke-width="1.5"/>
+      <rect x="15" y="14" width="73" height="22" rx="11" fill="#143c37"/>
+      <path d="M25 25l4 4 7-9" fill="none" stroke="#4bd69b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="43" y="29" fill="#97edd5" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="10" font-weight="700" letter-spacing="0.8">VERIFY</text>
+      <text x="16" y="63" fill="#d9f3ec" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" font-weight="650">tests/test_checkout.py</text>
+    </g>
+    <text x="765" y="553" fill="#6f829f" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="13">Reverse dependencies reveal the blast radius; matching tests become the review plan.</text>
+
+    <!-- Integration strip -->
+    <g filter="url(#shadow)">
+      <rect x="728" y="614" width="800" height="218" rx="22" fill="#0c1727" stroke="#2a3c59" stroke-width="1.5"/>
+    </g>
+    <text x="765" y="655" fill="#7f92ad" font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="12" font-weight="700" letter-spacing="1.5">ONE ENGINE · THREE SURFACES</text>
+    <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, sans-serif">
+      <g transform="translate(765 682)">
+        <rect width="214" height="91" rx="13" fill="#101e31" stroke="#293d5b"/>
+        <rect x="18" y="18" width="34" height="34" rx="9" fill="#123347"/>
+        <text x="35" y="41" text-anchor="middle" fill="#67e1ff" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="700">$_</text>
+        <text x="66" y="35" fill="#e0e9f6" font-size="16" font-weight="700">CLI</text>
+        <text x="66" y="57" fill="#7f91ab" font-size="12">local worktrees</text>
+      </g>
+      <g transform="translate(999 682)">
+        <rect width="236" height="91" rx="13" fill="#101e31" stroke="#293d5b"/>
+        <rect x="18" y="18" width="34" height="34" rx="9" fill="#252447"/>
+        <path d="M28 35h14M35 28v14" stroke="#a89aff" stroke-width="2.2" stroke-linecap="round"/>
+        <text x="66" y="35" fill="#e0e9f6" font-size="16" font-weight="700">GitHub Action</text>
+        <text x="66" y="57" fill="#7f91ab" font-size="12">pull-request reports</text>
+      </g>
+      <g transform="translate(1255 682)">
+        <rect width="236" height="91" rx="13" fill="#101e31" stroke="#293d5b"/>
+        <rect x="18" y="18" width="34" height="34" rx="9" fill="#13302f"/>
+        <circle cx="29" cy="35" r="3" fill="#58ddb8"/>
+        <circle cx="42" cy="28" r="3" fill="#58ddb8"/>
+        <circle cx="42" cy="42" r="3" fill="#58ddb8"/>
+        <path d="M31 34l8-5M31 36l8 5" stroke="#58ddb8" stroke-width="1.6"/>
+        <text x="66" y="35" fill="#e0e9f6" font-size="16" font-weight="700">MCP</text>
+        <text x="66" y="57" fill="#7f91ab" font-size="12">read-only agent tools</text>
+      </g>
+      <text x="765" y="806" fill="#7588a5" font-size="13">Markdown + JSON</text>
+      <circle cx="892" cy="801" r="2" fill="#415570"/>
+      <text x="908" y="806" fill="#7588a5" font-size="13">Python + JavaScript / TypeScript</text>
+      <circle cx="1141" cy="801" r="2" fill="#415570"/>
+      <text x="1157" y="806" fill="#7588a5" font-size="13">No API key required</text>
+    </g>
+
+    <rect x="1" y="1" width="1598" height="898" rx="31" fill="none" stroke="#2b3a53" stroke-width="2"/>
+  </g>
+</svg>
