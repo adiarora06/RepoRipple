@@ -2,7 +2,7 @@
 
 All notable changes to RepoRipple are documented here.
 
-## 0.2.0 - 2026-09-26
+## 0.2.0 - 2026-09-27
 
 ### Added
 

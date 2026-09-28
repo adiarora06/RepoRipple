@@ -4,9 +4,22 @@
 
 **Know what a code change can break before you merge it.**
 
+[![PyPI](https://img.shields.io/pypi/v/reporipple?label=PyPI)](https://pypi.org/project/reporipple/)
+[![Python versions](https://img.shields.io/pypi/pyversions/reporipple)](https://pypi.org/project/reporipple/)
+[![CI](https://github.com/adiarora06/RepoRipple/actions/workflows/ci.yml/badge.svg)](https://github.com/adiarora06/RepoRipple/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![MCP Registry](https://img.shields.io/badge/MCP-Registry-6f42c1)](docs/mcp.md)
+
 RepoRipple is a local-first change-impact analyzer for engineers and coding agents. It builds a lightweight dependency graph from a repository, reads the current Git diff, traces reverse dependencies, recommends relevant tests, and emits a review-ready Markdown or JSON report.
 
 The deterministic analyzer requires no API key, hosted service, source upload, or framework integration. An optional, explicitly requested OpenRouter explanation can turn its anonymized evidence into a short narrative without changing the underlying analysis.
+
+[PyPI](https://pypi.org/project/reporipple/) ·
+[Portfolio case study](https://www.adiarora.dev/open-source/reporipple) ·
+[MCP setup](docs/mcp.md) ·
+[v0.2.0 release](https://github.com/adiarora06/RepoRipple/releases/tag/v0.2.0)
+
+![RepoRipple traces a Git change through its dependency blast radius and produces a focused risk report](docs/assets/reporipple-hero.png)
 
 ## Why RepoRipple?
 
@@ -19,23 +32,19 @@ Code graphs explain how a repository is connected. RepoRipple applies that graph
 - Should this pull request be blocked for additional review?
 - What structured context should I give a coding agent?
 
-## Quick start
+## Install and run
 
 ```bash
-git clone https://github.com/adiarora06/RepoRipple.git
-cd RepoRipple
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
+pip install reporipple
 
-# Analyze staged, unstaged, and untracked changes in another repository.
-reporipple /path/to/repository
+# Analyze staged, unstaged, and untracked changes.
+reporipple .
 
 # Compare a feature branch with main.
-reporipple /path/to/repository --base main
+reporipple . --base origin/main
 
 # Generate machine-readable context for an agent or automation.
-reporipple /path/to/repository --base main --format json --output impact.json
+reporipple . --base origin/main --format json --output impact.json
 
 # Fail CI when a change reaches high risk.
 reporipple . --base origin/main --fail-on high
@@ -43,6 +52,20 @@ reporipple . --base origin/main --fail-on high
 # Audit the exact anonymized OpenRouter request without sending it.
 reporipple . --base origin/main --explain-preview
 ```
+
+Run it once without installing:
+
+```bash
+uvx reporipple . --base origin/main
+```
+
+## Three product surfaces
+
+| Surface | Best for | Output |
+| --- | --- | --- |
+| CLI | Local review, scripts, and CI gates | Markdown or JSON impact report |
+| GitHub Action | Pull-request evidence and risk thresholds | Job summary, artifact, and optional stable PR comment |
+| MCP server | Codex, OpenCode, Cursor, Claude Code, and VS Code | Typed `forecast_change` and `analyze_worktree` tools |
 
 ## GitHub Action
 
@@ -67,7 +90,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: reporipple
-        uses: adiarora06/RepoRipple@24e4e431c241b9adb76e8735640a53ab8d1c3248
+        uses: adiarora06/RepoRipple@8e571fa042212fbed09db042c9c736359bd380f2 # v0.2.0
         with:
           base: ${{ github.event.pull_request.base.sha }}
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
@@ -96,8 +119,7 @@ Claude Code, and VS Code over a local, read-only MCP server. From a source check
 uv run reporipple mcp --root /path/to/allowed/workspace
 ```
 
-After the package is published to PyPI, agent configurations can launch it without a
-clone:
+Launch the published package without a clone:
 
 ```bash
 uvx reporipple mcp --root /path/to/allowed/workspace
