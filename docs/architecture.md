@@ -42,7 +42,10 @@ adapter exists, describe RepoRipple as standalone—not as endorsed by or built 
 ## Trust model
 
 - Repository files are parsed, never executed.
-- Git is invoked with argument arrays rather than a shell.
+- Git is invoked with argument arrays rather than a shell; user-provided base revisions are
+  resolved to commit IDs before they reach diff operations.
+- Deleted and renamed source files are read from the comparison revision and overlaid in memory so
+  their surviving reverse dependencies remain visible without changing the worktree.
 - MCP tools reject repositories and changed paths outside the configured root.
 - The GitHub workflow never runs untrusted pull-request code with a write-capable token.
 - The optional explanation request contains opaque evidence IDs and generic metadata, not code or

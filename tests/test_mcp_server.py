@@ -1,3 +1,4 @@
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -62,6 +63,65 @@ def test_analyze_worktree_reads_actual_git_changes(tmp_path):
 
     assert result.changed_files == ["src/store.py"]
     assert result.impacted_files[0].path == "src/service.py"
+
+
+def test_analyze_worktree_traces_dependents_of_a_deleted_file(tmp_path):
+    repository = tmp_path / "project"
+    repository.mkdir()
+    sample_repository(repository)
+    git(repository, "init", "-b", "main")
+    git(repository, "config", "user.name", "Test")
+    git(repository, "config", "user.email", "test@example.com")
+    git(repository, "add", ".")
+    git(repository, "commit", "-m", "initial")
+    (repository / "src/store.py").unlink()
+
+    result = RepoRippleMCPService(tmp_path).analyze_worktree(repository="project")
+
+    assert result.changed_files == ["src/store.py"]
+    assert [(item.path, item.distance) for item in result.impacted_files] == [
+        ("src/service.py", 1),
+        ("tests/test_service.py", 2),
+    ]
+
+
+def test_cli_traces_dependents_of_a_deleted_file(tmp_path, capsys):
+    sample_repository(tmp_path)
+    git(tmp_path, "init", "-b", "main")
+    git(tmp_path, "config", "user.name", "Test")
+    git(tmp_path, "config", "user.email", "test@example.com")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-m", "initial")
+    (tmp_path / "src/store.py").unlink()
+
+    assert main([str(tmp_path), "--format", "json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["changed_files"] == ["src/store.py"]
+    assert [item["path"] for item in payload["impacted_files"]] == [
+        "src/service.py",
+        "tests/test_service.py",
+    ]
+
+
+def test_analyze_worktree_traces_stale_dependents_after_a_rename(tmp_path):
+    repository = tmp_path / "project"
+    repository.mkdir()
+    write(repository, "src/legacy.py", "VALUE = 1\n")
+    write(repository, "src/consumer.py", "from legacy import VALUE\n")
+    git(repository, "init", "-b", "main")
+    git(repository, "config", "user.name", "Test")
+    git(repository, "config", "user.email", "test@example.com")
+    git(repository, "add", ".")
+    git(repository, "commit", "-m", "initial")
+    git(repository, "mv", "src/legacy.py", "src/current.py")
+
+    result = RepoRippleMCPService(tmp_path).analyze_worktree(repository="project")
+
+    assert result.changed_files == ["src/current.py", "src/legacy.py"]
+    assert [(item.path, item.distance) for item in result.impacted_files] == [
+        ("src/consumer.py", 1)
+    ]
 
 
 def test_rejects_repository_and_changed_paths_outside_allowed_root(tmp_path):

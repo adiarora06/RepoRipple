@@ -17,7 +17,7 @@ from reporipple.explain import (
     render_explanation_markdown,
     render_preview_markdown,
 )
-from reporipple.git import GitError, changed_files
+from reporipple.git import GitError, discover_changes
 from reporipple.report import render_json, render_markdown
 from reporipple.scanner import scan_repository
 
@@ -105,8 +105,14 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        changed = args.changed or changed_files(root, args.base)
-        graph = scan_repository(root)
+        if args.changed:
+            changed = args.changed
+            previous_files: dict[str, str] = {}
+        else:
+            discovery = discover_changes(root, args.base)
+            changed = discovery.paths
+            previous_files = discovery.previous_files
+        graph = scan_repository(root, virtual_files=previous_files)
         report = analyze_impact(root, graph, changed, max_depth=args.max_depth)
     except GitError as exc:
         print(f"error: {exc}", file=sys.stderr)

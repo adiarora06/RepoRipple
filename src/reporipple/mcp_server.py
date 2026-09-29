@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from reporipple import __version__
 from reporipple.analysis import analyze_impact
-from reporipple.git import changed_files
+from reporipple.git import discover_changes
 from reporipple.models import ImpactReport
 from reporipple.scanner import scan_repository
 
@@ -167,8 +167,9 @@ class RepoRippleMCPService:
         )
         if invalid_base:
             raise ValueError("base must be a non-empty Git revision without whitespace")
-        paths = self.access.changed_paths(repo, changed_files(repo, base))
-        graph = scan_repository(repo)
+        discovery = discover_changes(repo, base)
+        paths = self.access.changed_paths(repo, discovery.paths)
+        graph = scan_repository(repo, virtual_files=discovery.previous_files)
         return ImpactReportPayload.from_report(
             analyze_impact(repo, graph, paths, max_depth=max_depth)
         )
