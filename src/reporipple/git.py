@@ -111,6 +111,9 @@ def _ensure_git_repository(root: Path) -> None:
     )
     if result.returncode != 0:
         raise GitError(f"{root} is not inside a Git repository")
+    top_level = Path(result.stdout.strip()).resolve()
+    if root.resolve() != top_level:
+        raise GitError(f"repository path must be the Git top level: {top_level}")
 
 
 def _resolve_base(root: Path, base: str) -> str:

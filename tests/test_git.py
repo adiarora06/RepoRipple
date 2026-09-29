@@ -128,15 +128,18 @@ def test_base_comparison_uses_merge_base_for_removed_content(tmp_path):
     }
 
 
-@pytest.mark.parametrize("base", ["--help", "--output=/tmp/reporipple-owned"])
-def test_rejects_option_like_base_before_running_diff(tmp_path, base):
+def test_rejects_option_like_base_before_running_diff(tmp_path):
     initialize_repository(tmp_path)
     (tmp_path / "tracked.py").write_text("value = 1\n", encoding="utf-8")
     git(tmp_path, "add", ".")
     git(tmp_path, "commit", "-m", "initial")
+    unexpected_output = tmp_path / "unexpected-output"
 
-    with pytest.raises(GitError, match="must not start"):
-        discover_changes(tmp_path, base)
+    for base in ("--help", f"--output={unexpected_output}"):
+        with pytest.raises(GitError, match="must not start"):
+            discover_changes(tmp_path, base)
+
+    assert not unexpected_output.exists()
 
 
 def test_invalid_base_has_a_clear_error(tmp_path):
@@ -150,6 +153,15 @@ def test_invalid_base_has_a_clear_error(tmp_path):
 
     with pytest.raises(GitError, match="must not be empty"):
         discover_changes(tmp_path, "")
+
+
+def test_rejects_a_subdirectory_that_would_misalign_git_paths(tmp_path):
+    initialize_repository(tmp_path)
+    nested = tmp_path / "packages" / "api"
+    nested.mkdir(parents=True)
+
+    with pytest.raises(GitError, match="must be the Git top level"):
+        discover_changes(nested)
 
 
 def test_nul_delimited_output_preserves_newlines_in_paths(tmp_path):

@@ -68,6 +68,26 @@ def test_prunes_builtin_and_gitignored_directories_before_walking(tmp_path, monk
     assert "scratch" not in visited
 
 
+def test_honors_nested_gitignore_rules_negations_and_anchored_patterns(tmp_path):
+    write(tmp_path, ".gitignore", "*.py\n!keep.py\n/root_only.ts\n")
+    write(tmp_path, "drop.py", "value = 1\n")
+    write(tmp_path, "keep.py", "value = 1\n")
+    write(tmp_path, "root_only.ts", "export const value = 1;\n")
+    write(tmp_path, "nested/.gitignore", "*.js\n!keep.js\n")
+    write(tmp_path, "nested/drop.py", "value = 1\n")
+    write(tmp_path, "nested/keep.py", "value = 1\n")
+    write(tmp_path, "nested/drop.js", "export const value = 1;\n")
+    write(tmp_path, "nested/keep.js", "export const value = 1;\n")
+    write(tmp_path, "nested/root_only.ts", "export const value = 1;\n")
+
+    assert discover_source_files(tmp_path) == {
+        "keep.py",
+        "nested/keep.js",
+        "nested/keep.py",
+        "nested/root_only.ts",
+    }
+
+
 def test_duplicate_python_modules_resolve_deterministically():
     files = ["src/foo.py", "consumer.py", "foo.py"]
     forward_warnings: list[str] = []
