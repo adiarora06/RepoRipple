@@ -1,3 +1,5 @@
+import pytest
+
 from reporipple.analysis import analyze_impact
 from reporipple.models import DependencyEdge, RepositoryGraph
 
@@ -37,6 +39,70 @@ def test_flags_sensitive_wide_changes_as_high_risk(tmp_path):
     assert report.risk_level == "high"
     assert any("Sensitive area" in reason for reason in report.risk_reasons)
     assert any("Moderate blast radius" in reason for reason in report.risk_reasons)
+
+
+@pytest.mark.parametrize(
+    ("path", "concept"),
+    [
+        ("src/payment.py", "payment"),
+        ("src/auth_service.py", "auth"),
+        ("src/paymentGateway.ts", "payment"),
+        ("src/security-check.ts", "security"),
+        ("src/migrations.py", "migration"),
+        ("src/permissions.ts", "permissions"),
+    ],
+)
+def test_detects_sensitive_concepts_in_file_stems(tmp_path, path, concept):
+    graph = RepositoryGraph(files={path})
+
+    report = analyze_impact(tmp_path, graph, [path])
+
+    assert report.risk_level == "high"
+    assert f"Sensitive area changed: {concept}" in report.risk_reasons
+
+
+def test_reports_sensitive_impacted_files(tmp_path):
+    graph = RepositoryGraph(
+        files={"src/shared.py", "src/payment_service.py", "src/authGateway.ts"},
+        edges=[
+            DependencyEdge("src/payment_service.py", "src/shared.py", "python-import"),
+            DependencyEdge("src/authGateway.ts", "src/shared.py", "typescript-import"),
+        ],
+    )
+
+    report = analyze_impact(tmp_path, graph, ["src/shared.py"])
+
+    assert report.risk_level == "medium"
+    assert (
+        "Sensitive dependent files affected: src/authGateway.ts (auth); "
+        "src/payment_service.py (payment)"
+    ) in report.risk_reasons
+
+
+def test_ignores_benign_sensitive_substrings(tmp_path):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    paths = {
+        "src/author.py",
+        "src/paymentology.py",
+        "src/securitys.py",
+        "src/migratory.py",
+    }
+    graph = RepositoryGraph(files=paths)
+
+    for path in sorted(paths):
+        report = analyze_impact(tmp_path, graph, [path])
+
+        assert report.risk_level == "low"
+        assert not any("Sensitive" in reason for reason in report.risk_reasons)
+
+
+def test_keeps_configuration_changes_medium_risk(tmp_path):
+    graph = RepositoryGraph(files={"package.json"})
+
+    report = analyze_impact(tmp_path, graph, ["package.json"])
+
+    assert report.risk_level == "medium"
+    assert "Runtime, dependency, or deployment configuration changed" in report.risk_reasons
 
 
 def test_recommends_project_test_command_when_no_test_file_matches(tmp_path):

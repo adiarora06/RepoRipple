@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import deque
 from pathlib import Path
 
@@ -17,6 +18,27 @@ HIGH_RISK_MARKERS = {
     "payment",
     "permissions",
     "security",
+}
+SENSITIVE_TOKEN_ALIASES = {
+    "auth": "auth",
+    "authentication": "auth",
+    "authentications": "auth",
+    "authorization": "authorization",
+    "authorizations": "authorization",
+    "billing": "billing",
+    "billings": "billing",
+    "checkout": "checkout",
+    "checkouts": "checkout",
+    "database": "database",
+    "databases": "database",
+    "migration": "migration",
+    "migrations": "migration",
+    "payment": "payment",
+    "payments": "payment",
+    "permission": "permissions",
+    "permissions": "permissions",
+    "security": "security",
+    "securities": "security",
 }
 CONFIG_NAMES = {
     "dockerfile",
@@ -148,13 +170,23 @@ def _risk(
 ) -> tuple[RiskLevel, list[str]]:
     reasons: list[str] = []
     score = 0
-    tokens = {part.lower() for path in changed for part in Path(path).parts}
     names = {Path(path).name.lower() for path in changed}
 
-    sensitive = sorted(HIGH_RISK_MARKERS & tokens)
+    sensitive = sorted({concept for path in changed for concept in _sensitive_concepts(path)})
     if sensitive:
         score += 3
         reasons.append(f"Sensitive area changed: {', '.join(sensitive)}")
+    sensitive_impacted = [
+        (item.path, sorted(_sensitive_concepts(item.path)))
+        for item in impacted
+        if not _is_test(item.path) and Path(item.path).suffix.lower() not in DOC_EXTENSIONS
+    ]
+    sensitive_impacted = [item for item in sensitive_impacted if item[1]]
+    if sensitive_impacted:
+        score += 2
+        reasons.append(
+            "Sensitive dependent files affected: " + _format_sensitive_files(sensitive_impacted)
+        )
     if CONFIG_NAMES & names:
         score += 2
         reasons.append("Runtime, dependency, or deployment configuration changed")
@@ -172,6 +204,27 @@ def _risk(
         reasons.append("Localized change with a small dependency radius")
     level: RiskLevel = "high" if score >= 4 else "medium" if score >= 2 else "low"
     return level, reasons
+
+
+def _sensitive_concepts(path: str) -> set[str]:
+    concepts: set[str] = set()
+    for component in Path(path).parts:
+        # Keep concepts distinct: ``prepayment`` should not match ``payment``, while
+        # payment_service, payment-service, and paymentService should all match.
+        separated = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", component)
+        separated = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", separated)
+        for token in re.findall(r"[A-Za-z0-9]+", separated):
+            if concept := SENSITIVE_TOKEN_ALIASES.get(token.lower()):
+                concepts.add(concept)
+    return concepts
+
+
+def _format_sensitive_files(files: list[tuple[str, list[str]]], limit: int = 3) -> str:
+    ordered = sorted(files, key=lambda item: item[0])
+    rendered = [f"{path} ({', '.join(concepts)})" for path, concepts in ordered[:limit]]
+    if len(ordered) > limit:
+        rendered.append(f"+{len(ordered) - limit} more")
+    return "; ".join(rendered)
 
 
 def _normalize(path: str) -> str:
