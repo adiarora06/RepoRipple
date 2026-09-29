@@ -25,10 +25,9 @@ uv run reporipple mcp --root /absolute/path/to/your/workspace
 An MCP server waits for a client on standard input, so an idle command with no terminal
 output is expected. Stop it with `Ctrl-C` when testing manually.
 
-## Run with `uvx` after PyPI publishing
+## Run the published package with `uvx`
 
-The client examples below require a RepoRipple release containing MCP support to be
-published to PyPI first:
+RepoRipple releases include MCP support on PyPI:
 
 ```bash
 uvx reporipple mcp --root /absolute/path/to/your/workspace
@@ -189,5 +188,6 @@ Client configuration references: [Codex MCP](https://developers.openai.com/codex
   MCP client.
 - **Repository is outside the allowed root**: restart the server with a suitable
   absolute `--root`, or request a repository beneath the current root.
-- **`uvx` cannot find RepoRipple**: the MCP-enabled package has not been published to
-  PyPI yet; use the source-checkout command above.
+- **`uvx` cannot find RepoRipple**: confirm that PyPI is reachable, then retry with
+  `uvx --refresh reporipple mcp --root /absolute/path/to/your/workspace` or use the
+  source-checkout command above.

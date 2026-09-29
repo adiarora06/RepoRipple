@@ -2,6 +2,27 @@
 
 All notable changes to RepoRipple are documented here.
 
+## Unreleased
+
+### Added
+
+- Structured Git change discovery with statuses, rename origins, and historical source content.
+- End-to-end impact tracing for deleted files and both sides of a rename in the CLI and MCP server.
+- Deterministic warnings for ambiguous Python modules and oversized source files.
+
+### Changed
+
+- Repository discovery now prunes built-in and `.gitignore`-excluded directories before walking
+  them and skips parsing source files larger than 1 MB.
+- Sensitive-area scoring recognizes exact concepts in snake case, kebab case, camel case, and
+  plural filenames, including sensitive production files reached by a change.
+- Git path parsing now uses NUL-delimited output so unusual filenames remain intact.
+
+### Security
+
+- Base revisions are validated and resolved to commit IDs before use, preventing option-like
+  input from reaching `git diff`.
+
 ## 0.2.0 - 2026-09-27
 
 ### Added

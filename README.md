@@ -157,9 +157,12 @@ MCP server, and optional explanation layer share one deterministic analysis engi
 1. Discovers Python, JavaScript, and TypeScript source files.
 2. Extracts Python imports with the standard-library AST and relative JS/TS imports with a focused parser.
 3. Builds forward and reverse dependency relationships.
-4. Gets changed files from an explicit base revision or the local worktree.
-5. Traverses dependents to a configurable depth.
-6. Adds test recommendations, documentation reminders, and deterministic risk signals.
+4. Gets added, modified, deleted, and renamed files from an explicit base revision or the local
+   worktree.
+5. Retains pre-change source for deleted and renamed files so their remaining dependents can still
+   be traced.
+6. Traverses dependents to a configurable depth.
+7. Adds test recommendations, documentation reminders, and deterministic risk signals.
 
 The core intentionally avoids LLM scoring. Results stay reproducible, private, fast, and usable in CI. Optional AI explanations can be layered over the JSON output without making correctness depend on a model.
 
@@ -227,6 +230,7 @@ When no base or explicit path is supplied, RepoRipple analyzes staged, unstaged,
 | --- | --- |
 | Python absolute and relative imports | Supported |
 | JavaScript/TypeScript relative imports | Supported |
+| Deleted and renamed source files | Supported |
 | Reverse-dependency paths | Supported |
 | Test-file recommendations | Supported |
 | Markdown and JSON reports | Supported |

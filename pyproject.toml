@@ -43,11 +43,12 @@ dev = [
 reporipple = "reporipple.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/adiarora06/RepoRipple"
+Homepage = "https://www.adiarora.dev/open-source/reporipple"
 Documentation = "https://github.com/adiarora06/RepoRipple#readme"
 Issues = "https://github.com/adiarora06/RepoRipple/issues"
 Source = "https://github.com/adiarora06/RepoRipple"
 Changelog = "https://github.com/adiarora06/RepoRipple/blob/main/CHANGELOG.md"
+"MCP setup" = "https://github.com/adiarora06/RepoRipple/blob/main/docs/mcp.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/reporipple"]
