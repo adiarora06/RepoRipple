@@ -8,17 +8,6 @@ from pathlib import Path
 
 from reporipple.models import ImpactedFile, ImpactReport, RepositoryGraph, RiskLevel
 
-HIGH_RISK_MARKERS = {
-    "auth",
-    "authorization",
-    "billing",
-    "checkout",
-    "database",
-    "migration",
-    "payment",
-    "permissions",
-    "security",
-}
 SENSITIVE_TOKEN_ALIASES = {
     "auth": "auth",
     "authentication": "auth",
@@ -172,7 +161,14 @@ def _risk(
     score = 0
     names = {Path(path).name.lower() for path in changed}
 
-    sensitive = sorted({concept for path in changed for concept in _sensitive_concepts(path)})
+    sensitive = sorted(
+        {
+            concept
+            for path in changed
+            if not _is_test(path) and Path(path).suffix.lower() not in DOC_EXTENSIONS
+            for concept in _sensitive_concepts(path)
+        }
+    )
     if sensitive:
         score += 3
         reasons.append(f"Sensitive area changed: {', '.join(sensitive)}")

@@ -96,6 +96,16 @@ def test_ignores_benign_sensitive_substrings(tmp_path):
         assert not any("Sensitive" in reason for reason in report.risk_reasons)
 
 
+@pytest.mark.parametrize("path", ["tests/test_payment.py", "docs/authentication.md"])
+def test_sensitive_terms_in_tests_and_docs_do_not_raise_risk(tmp_path, path):
+    graph = RepositoryGraph(files={path})
+
+    report = analyze_impact(tmp_path, graph, [path])
+
+    assert report.risk_level == "low"
+    assert not any("Sensitive" in reason for reason in report.risk_reasons)
+
+
 def test_keeps_configuration_changes_medium_risk(tmp_path):
     graph = RepositoryGraph(files={"package.json"})
 
