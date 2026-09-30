@@ -17,7 +17,7 @@ The deterministic analyzer requires no API key, hosted service, source upload, o
 [PyPI](https://pypi.org/project/reporipple/) ·
 [Portfolio case study](https://www.adiarora.dev/open-source/reporipple) ·
 [MCP setup](docs/mcp.md) ·
-[v0.2.0 release](https://github.com/adiarora06/RepoRipple/releases/tag/v0.2.0)
+[v0.3.0 release](https://github.com/adiarora06/RepoRipple/releases/tag/v0.3.0)
 
 ![RepoRipple traces a Git change through its dependency blast radius and produces a focused risk report](docs/assets/reporipple-hero.png)
 
@@ -90,7 +90,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: reporipple
-        uses: adiarora06/RepoRipple@8e571fa042212fbed09db042c9c736359bd380f2 # v0.2.0
+        uses: adiarora06/RepoRipple@996f43f28a51ba8d6788a73a349f4ebb0f47a186 # v0.3.0
         with:
           base: ${{ github.event.pull_request.base.sha }}
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
