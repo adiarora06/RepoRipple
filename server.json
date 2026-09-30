@@ -3,7 +3,7 @@
   "name": "io.github.adiarora06/reporipple",
   "title": "RepoRipple",
   "description": "Deterministic repository change-impact analysis for engineers and coding agents.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "repository": {
     "url": "https://github.com/adiarora06/RepoRipple",
     "source": "github"
@@ -13,7 +13,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "reporipple",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "runtimeHint": "uvx",
       "packageArguments": [
         {
