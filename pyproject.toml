@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "reporipple"
-version = "0.2.0"
+version = "0.3.0"
 description = "Deterministic change-impact analysis for engineers and coding agents."
 readme = "README.md"
 requires-python = ">=3.11"
