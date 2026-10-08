@@ -95,6 +95,30 @@ def test_evidence_payload_excludes_private_repository_data():
     assert bundle.payload["risk_signals"] == [{"evidence_id": "E004", "category": "sensitive_area"}]
 
 
+def test_evidence_payload_classifies_mts_and_cts_as_typescript():
+    report = ImpactReport(
+        repository="repository",
+        changed_files=["src/entry.mts"],
+        impacted_files=[ImpactedFile("src/config.cts", 1, ("src/entry.mts", "src/config.cts"))],
+        suggested_tests=["tests/entry.test.mts", "tests/config.test.cts"],
+        documentation_to_review=[],
+        risk_level="low",
+        risk_reasons=[],
+        graph_files=2,
+        graph_edges=1,
+        warnings=[],
+    )
+
+    payload = build_evidence_bundle(report).payload
+
+    assert payload["changed"][0]["file_type"] == "typescript"
+    assert payload["impacted"][0]["file_type"] == "typescript"
+    assert [item["verification_type"] for item in payload["verification"]] == [
+        "typescript_test",
+        "typescript_test",
+    ]
+
+
 def test_request_enforces_privacy_schema_and_price_controls():
     request = build_openrouter_request(build_evidence_bundle(private_report()))
 

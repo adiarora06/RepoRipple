@@ -468,6 +468,8 @@ def _file_type(path: str) -> str:
         ".py": "python",
         ".ts": "typescript",
         ".tsx": "typescript",
+        ".mts": "typescript",
+        ".cts": "typescript",
         ".js": "javascript",
         ".jsx": "javascript",
         ".mjs": "javascript",
