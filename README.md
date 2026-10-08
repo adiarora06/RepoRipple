@@ -155,14 +155,24 @@ MCP server, and optional explanation layer share one deterministic analysis engi
 ## How it works
 
 1. Discovers Python, JavaScript, and TypeScript source files.
-2. Extracts Python imports with the standard-library AST and relative JS/TS imports with a focused parser.
-3. Builds forward and reverse dependency relationships.
-4. Gets added, modified, deleted, and renamed files from an explicit base revision or the local
+2. Extracts Python imports with the standard-library AST and JS/TS imports with a focused parser.
+3. Resolves JS/TS dependencies in a deterministic order: relative paths, the nearest
+   `tsconfig.json` or `jsconfig.json` `paths` mappings, its `baseUrl`, and then npm/Yarn workspace
+   packages declared by the root `package.json`.
+4. Builds forward and reverse dependency relationships.
+5. Gets added, modified, deleted, and renamed files from an explicit base revision or the local
    worktree.
-5. Retains pre-change source for deleted and renamed files so their remaining dependents can still
+6. Retains pre-change source for deleted and renamed files so their remaining dependents can still
    be traced.
-6. Traverses dependents to a configurable depth.
-7. Adds test recommendations, documentation reminders, and deterministic risk signals.
+7. Traverses dependents to a configurable depth.
+8. Adds test recommendations, documentation reminders, and deterministic risk signals.
+
+Workspace resolution is local and source-aware. RepoRipple matches imports to explicitly declared
+`package.json` workspaces by package name, respects their public export boundaries, and follows
+entry points that resolve to source files in the repository. It does not inspect installed
+`node_modules`, contact a registry, or run a package manager. `pnpm-workspace.yaml`, external
+packages, and workspace entry points that exist only as ignored or missing build output are not
+currently resolved.
 
 The core intentionally avoids LLM scoring. Results stay reproducible, private, fast, and usable in CI. Optional AI explanations can be layered over the JSON output without making correctness depend on a model.
 
@@ -230,6 +240,8 @@ When no base or explicit path is supplied, RepoRipple analyzes staged, unstaged,
 | --- | --- |
 | Python absolute and relative imports | Supported |
 | JavaScript/TypeScript relative imports | Supported |
+| JavaScript/TypeScript `paths` and `baseUrl` aliases | Supported |
+| npm/Yarn `package.json` workspace package imports | Supported |
 | Deleted and renamed source files | Supported |
 | Reverse-dependency paths | Supported |
 | Test-file recommendations | Supported |
@@ -237,7 +249,7 @@ When no base or explicit path is supplied, RepoRipple analyzes staged, unstaged,
 | Risk-based CI exit code | Supported |
 | MCP tools for coding agents | Supported |
 | Privacy-filtered OpenRouter explanations | Optional |
-| Monorepo package aliases | Planned |
+| `pnpm-workspace.yaml` and external package resolution | Not supported |
 | Go, Rust, and Java imports | Planned |
 | GitHub pull-request reports and comments | Supported |
 

@@ -6,7 +6,10 @@ evidence.
 
 ```mermaid
 flowchart LR
-    Diff[Git diff or proposed files] --> Core[Deterministic impact engine]
+    Source[Repository source files] --> Resolve[Deterministic import resolution]
+    Config[tsconfig / jsconfig / package.json] --> Resolve
+    Resolve --> Core[Deterministic impact engine]
+    Diff[Git diff or proposed files] --> Core
     Core --> Report[Markdown and JSON]
     Report --> CLI[Local CLI]
     Report --> Action[GitHub Action]
@@ -28,6 +31,23 @@ flowchart LR
 | MCP server | Give coding agents typed, read-only access within an allowed workspace root | Never |
 | OpenRouter adapter | Explain an anonymized evidence bundle | Explicit opt-in only |
 
+## JavaScript and TypeScript resolution
+
+RepoRipple resolves each JavaScript or TypeScript import against repository source files in this
+order:
+
+1. Relative paths.
+2. `paths` mappings from the nearest applicable `tsconfig.json` or `jsconfig.json`, using the most
+   specific matching pattern and its declared target order.
+3. That configuration's `baseUrl`.
+4. A uniquely named npm/Yarn workspace declared by the root `package.json`.
+
+Workspace package resolution observes declared export boundaries and local entry points. A bare
+specifier that is not one of those workspaces remains external and does not become a graph edge.
+RepoRipple does not inspect `node_modules`, execute a package manager, or parse
+`pnpm-workspace.yaml`. Consequently, configurations whose only targets are ignored or unavailable
+build artifacts can remain unresolved.
+
 ## Relationship to Graphify
 
 RepoRipple is not an official Graphify extension and does not depend on Graphify. Graphify builds a
@@ -42,6 +62,10 @@ adapter exists, describe RepoRipple as standalone—not as endorsed by or built 
 ## Trust model
 
 - Repository files are parsed, never executed.
+- TypeScript, JavaScript, and workspace configuration is treated as data. RepoRipple does not load
+  configuration modules, run package scripts, or invoke npm, Yarn, or another package manager.
+- Alias and workspace targets must normalize inside the repository and resolve to a discovered
+  source file before they can become dependency edges.
 - Git is invoked with argument arrays rather than a shell; user-provided base revisions are
   resolved to commit IDs before they reach diff operations.
 - Deleted and renamed source files are read from the comparison revision and overlaid in memory so
