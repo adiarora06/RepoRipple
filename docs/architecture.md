@@ -44,9 +44,25 @@ order:
 
 Workspace package resolution observes declared export boundaries and local entry points. A bare
 specifier that is not one of those workspaces remains external and does not become a graph edge.
+Workspace selection supports recursive globs, bounded brace alternatives and ranges, and
+exclusions. Export conditions are syntax-aware: `.mts`/`.mjs` use an import profile,
+`.cts`/`.cjs` use a require profile, and ambiguous TypeScript/JavaScript files inspect both.
+Applicable custom conditions declared before a syntax or `default` fallback are included
+conservatively, preserving browser-, platform-, and source-specific dependency edges without
+assuming one deployment environment.
+
+The resolver intentionally does not correlate repeated custom-condition names across nested
+objects. That can retain extra edges that no single runtime condition set would choose, but avoids
+false-negative impact reports when the deployment condition set is unknown.
+
 RepoRipple does not inspect `node_modules`, execute a package manager, or parse
 `pnpm-workspace.yaml`. Consequently, configurations whose only targets are ignored or unavailable
-build artifacts can remain unresolved.
+build artifacts can remain unresolved. Pathological workspace glob sets that exceed fixed matching
+budgets fail closed with a warning: 512 effective patterns, 2,048 aggregate path components across
+unique patterns, 64 KiB of raw patterns, and 256 KiB after brace expansion. Resolver metadata
+changes receive configuration-risk and documentation signals, but configuration and manifest
+files are not yet graph nodes, so a metadata-only edit does not enumerate all importers whose
+resolution could change.
 
 ## Relationship to Graphify
 

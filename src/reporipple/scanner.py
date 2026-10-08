@@ -16,6 +16,7 @@ from reporipple.config import (
     MAX_SOURCE_FILE_BYTES,
     SOURCE_EXTENSIONS,
 )
+from reporipple.filesystem import read_repository_bytes
 from reporipple.javascript import JavaScriptResolver
 from reporipple.models import DependencyEdge, RepositoryGraph
 
@@ -100,13 +101,17 @@ def scan_repository(
         path = root / relative
         if relative in virtual_sources:
             content = virtual_sources[relative]
-            if len(content.encode("utf-8")) > MAX_SOURCE_FILE_BYTES:
+            try:
+                encoded_size = len(content.encode("utf-8"))
+            except UnicodeEncodeError as exc:
+                graph.warnings.append(f"Could not read {relative}: {exc}")
+                continue
+            if encoded_size > MAX_SOURCE_FILE_BYTES:
                 graph.warnings.append(_oversized_source_warning(relative))
                 continue
         else:
             try:
-                with path.open("rb") as source_file:
-                    raw_content = source_file.read(MAX_SOURCE_FILE_BYTES + 1)
+                raw_content = read_repository_bytes(root, relative, MAX_SOURCE_FILE_BYTES)
                 if len(raw_content) > MAX_SOURCE_FILE_BYTES:
                     graph.warnings.append(_oversized_source_warning(relative))
                     continue
@@ -202,8 +207,10 @@ def _match_gitignore_parts(pattern: tuple[str, ...], candidate: tuple[str, ...])
     if not pattern:
         return not candidate
     if pattern[0] == "**":
-        return _match_gitignore_parts(pattern[1:], candidate) or bool(candidate) and (
-            _match_gitignore_parts(pattern, candidate[1:])
+        return (
+            _match_gitignore_parts(pattern[1:], candidate)
+            or bool(candidate)
+            and (_match_gitignore_parts(pattern, candidate[1:]))
         )
     if not candidate or not fnmatch.fnmatchcase(candidate[0], pattern[0]):
         return False

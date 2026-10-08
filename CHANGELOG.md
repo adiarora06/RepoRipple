@@ -7,15 +7,19 @@ All notable changes to RepoRipple are documented here.
 ### Added
 
 - JavaScript and TypeScript import resolution through the nearest `tsconfig.json` or
-  `jsconfig.json` `paths` mappings and `baseUrl`.
+  `jsconfig.json` `paths` mappings, `baseUrl`, local `extends`, and TypeScript-compatible module
+  extension substitution.
 - Local package-name and export resolution for npm/Yarn workspaces declared in the root
-  `package.json`.
+  `package.json`, including bounded recursive globs, brace alternatives and ranges, npm-compatible
+  exclusions, and conservative syntax-aware conditional exports.
 
 ### Changed
 
 - JS/TS dependency graphs can now include aliases and cross-workspace imports that were previously
   invisible. Reports may therefore contain more edges, wider blast radii, and higher deterministic
   risk levels for the same change.
+- Repository source and resolver metadata reads now reject symbolic-link traversal, including
+  link swaps during reads on platforms with descriptor-relative file access.
 
 ## 0.3.0 - 2026-09-30
 

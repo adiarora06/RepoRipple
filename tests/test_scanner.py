@@ -37,15 +37,14 @@ def test_scans_relative_javascript_imports(tmp_path):
 
 
 def test_discovers_and_resolves_module_specific_typescript_extensions(tmp_path):
-    write(tmp_path, "src/app.mts", "import {load} from './loader';\n")
+    write(tmp_path, "src/app.mts", "import {load} from './loader.cjs';\n")
     write(tmp_path, "src/loader.cts", "export const load = () => 1;\n")
 
     graph = scan_repository(tmp_path)
 
     assert graph.files == {"src/app.mts", "src/loader.cts"}
     assert any(
-        edge.source == "src/app.mts" and edge.target == "src/loader.cts"
-        for edge in graph.edges
+        edge.source == "src/app.mts" and edge.target == "src/loader.cts" for edge in graph.edges
     )
 
 
@@ -111,9 +110,11 @@ def test_duplicate_python_modules_resolve_deterministically():
 
     assert forward == reverse
     assert forward["foo"] == "foo.py"
-    assert forward_warnings == reverse_warnings == [
-        "Ambiguous Python module 'foo': foo.py, src/foo.py; using foo.py"
-    ]
+    assert (
+        forward_warnings
+        == reverse_warnings
+        == ["Ambiguous Python module 'foo': foo.py, src/foo.py; using foo.py"]
+    )
 
 
 def test_scan_warns_and_does_not_parse_oversized_sources(tmp_path):
@@ -134,9 +135,16 @@ def test_virtual_deleted_source_participates_in_dependency_graph(tmp_path):
     graph = scan_repository(tmp_path, virtual_files={"deleted.py": "value = 1\n"})
 
     assert "deleted.py" in graph.files
-    assert any(
-        edge.source == "consumer.py" and edge.target == "deleted.py" for edge in graph.edges
-    )
+    assert any(edge.source == "consumer.py" and edge.target == "deleted.py" for edge in graph.edges)
+
+
+def test_unencodable_virtual_source_warns_without_aborting_scan(tmp_path):
+    write(tmp_path, "healthy.py", "value = 1\n")
+
+    graph = scan_repository(tmp_path, virtual_files={"broken.py": "\ud800"})
+
+    assert graph.files == {"broken.py", "healthy.py"}
+    assert any("Could not read broken.py" in warning for warning in graph.warnings)
 
 
 def test_records_python_parse_warnings(tmp_path):
