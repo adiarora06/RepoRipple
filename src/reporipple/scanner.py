@@ -6,7 +6,6 @@ import ast
 import fnmatch
 import os
 import posixpath
-import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -17,13 +16,8 @@ from reporipple.config import (
     MAX_SOURCE_FILE_BYTES,
     SOURCE_EXTENSIONS,
 )
+from reporipple.javascript import JavaScriptResolver
 from reporipple.models import DependencyEdge, RepositoryGraph
-
-JS_IMPORT_PATTERN = re.compile(
-    r"(?:import|export)\s+(?:[^'\"]*?\s+from\s+)?['\"]([^'\"]+)['\"]"
-    r"|require\(\s*['\"]([^'\"]+)['\"]\s*\)"
-    r"|import\(\s*['\"]([^'\"]+)['\"]\s*\)"
-)
 
 
 @dataclass(frozen=True)
@@ -82,14 +76,25 @@ def scan_repository(
     """Build an import graph, optionally overlaying in-memory source file contents.
 
     Virtual files use repository-relative POSIX paths. They may replace a file on disk or add a
-    source that no longer exists, such as the pre-change contents of a deleted file.
+    source or configuration file that no longer exists, such as pre-change content from Git.
     """
     root = root.resolve()
     files = discover_source_files(root)
-    virtual_sources = _normalize_virtual_sources(virtual_files)
+    virtual_overlays = _normalize_virtual_files(virtual_files)
+    virtual_sources = {
+        path: content
+        for path, content in virtual_overlays.items()
+        if PurePosixPath(path).suffix.lower() in SOURCE_EXTENSIONS
+    }
     files.update(virtual_sources)
     graph = RepositoryGraph(files=files)
     python_modules = _python_module_index(files, graph.warnings)
+    javascript = JavaScriptResolver(
+        root,
+        files,
+        graph.warnings,
+        virtual_files=virtual_overlays,
+    )
 
     for relative in sorted(files):
         path = root / relative
@@ -113,7 +118,7 @@ def scan_repository(
         if path.suffix.lower() == ".py":
             graph.edges.extend(_python_edges(relative, content, python_modules, graph.warnings))
         elif path.suffix.lower() in JAVASCRIPT_EXTENSIONS:
-            graph.edges.extend(_javascript_edges(relative, content, files))
+            graph.edges.extend(_javascript_edges(relative, content, javascript))
 
     graph.edges = sorted(set(graph.edges), key=lambda edge: (edge.source, edge.target, edge.kind))
     return graph
@@ -205,7 +210,7 @@ def _match_gitignore_parts(pattern: tuple[str, ...], candidate: tuple[str, ...])
     return _match_gitignore_parts(pattern[1:], candidate[1:])
 
 
-def _normalize_virtual_sources(virtual_files: Mapping[str, str] | None) -> dict[str, str]:
+def _normalize_virtual_files(virtual_files: Mapping[str, str] | None) -> dict[str, str]:
     normalized: dict[str, str] = {}
     if virtual_files is None:
         return normalized
@@ -219,15 +224,22 @@ def _normalize_virtual_sources(virtual_files: Mapping[str, str] | None) -> dict[
             raise ValueError(f"Virtual source path must stay inside the repository: {raw_path!s}")
         relative = posixpath.normpath(candidate)
         if relative in {"", "."}:
-            raise ValueError("Virtual source path cannot be empty")
-        if PurePosixPath(relative).suffix.lower() not in SOURCE_EXTENSIONS:
-            continue
+            raise ValueError("Virtual file path cannot be empty")
         if any(part in IGNORED_DIRECTORIES for part in PurePosixPath(relative).parts):
             continue
         if relative in normalized:
-            raise ValueError(f"Duplicate virtual source path after normalization: {relative}")
+            raise ValueError(f"Duplicate virtual file path after normalization: {relative}")
         normalized[relative] = content
     return normalized
+
+
+def _normalize_virtual_sources(virtual_files: Mapping[str, str] | None) -> dict[str, str]:
+    """Compatibility helper returning only supported source overlays."""
+    return {
+        path: content
+        for path, content in _normalize_virtual_files(virtual_files).items()
+        if PurePosixPath(path).suffix.lower() in SOURCE_EXTENSIONS
+    }
 
 
 def _oversized_source_warning(relative: str) -> str:
@@ -334,25 +346,12 @@ def _closest_python_target(imported: str, module_index: dict[str, str]) -> str |
     return None
 
 
-def _javascript_edges(source: str, content: str, files: set[str]) -> list[DependencyEdge]:
-    edges: list[DependencyEdge] = []
-    for match in JS_IMPORT_PATTERN.finditer(content):
-        specifier = next(group for group in match.groups() if group is not None)
-        if not specifier.startswith("."):
-            continue
-        target = _resolve_javascript_target(source, specifier, files)
-        if target and target != source:
-            edges.append(DependencyEdge(source=source, target=target, kind="js-import"))
-    return edges
-
-
-def _resolve_javascript_target(source: str, specifier: str, files: set[str]) -> str | None:
-    base = (Path(source).parent / specifier).as_posix()
-    normalized = posixpath.normpath(base)
-    candidates = [normalized]
-    candidates.extend(f"{normalized}{extension}" for extension in JAVASCRIPT_EXTENSIONS)
-    candidates.extend(
-        (Path(normalized) / f"index{extension}").as_posix()
-        for extension in JAVASCRIPT_EXTENSIONS
-    )
-    return next((candidate for candidate in candidates if candidate in files), None)
+def _javascript_edges(
+    source: str,
+    content: str,
+    resolver: JavaScriptResolver,
+) -> list[DependencyEdge]:
+    return [
+        DependencyEdge(source=source, target=target, kind="js-import")
+        for _, target in resolver.imports(source, content)
+    ]

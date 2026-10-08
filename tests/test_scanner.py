@@ -36,6 +36,19 @@ def test_scans_relative_javascript_imports(tmp_path):
     )
 
 
+def test_discovers_and_resolves_module_specific_typescript_extensions(tmp_path):
+    write(tmp_path, "src/app.mts", "import {load} from './loader';\n")
+    write(tmp_path, "src/loader.cts", "export const load = () => 1;\n")
+
+    graph = scan_repository(tmp_path)
+
+    assert graph.files == {"src/app.mts", "src/loader.cts"}
+    assert any(
+        edge.source == "src/app.mts" and edge.target == "src/loader.cts"
+        for edge in graph.edges
+    )
+
+
 def test_skips_dependency_directories(tmp_path):
     write(tmp_path, "node_modules/package/index.js", "export default 1\n")
     write(tmp_path, ".venv/lib/site.py", "value = 1\n")
