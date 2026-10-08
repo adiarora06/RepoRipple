@@ -115,6 +115,38 @@ def test_keeps_configuration_changes_medium_risk(tmp_path):
     assert "Runtime, dependency, or deployment configuration changed" in report.risk_reasons
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "packages/web/tsconfig.json",
+        "packages/web/tsconfig.build.json",
+        "apps/admin/jsconfig.json",
+        "apps/admin/jsconfig.test.json",
+    ],
+)
+def test_nested_js_and_ts_configs_count_as_configuration_risk(tmp_path, path):
+    graph = RepositoryGraph(files={path})
+
+    report = analyze_impact(tmp_path, graph, [path])
+
+    assert report.risk_level == "medium"
+    assert "Runtime, dependency, or deployment configuration changed" in report.risk_reasons
+
+
+@pytest.mark.parametrize(
+    "path", ["packages/web/tsconfig.build.json", "apps/admin/jsconfig.json"]
+)
+def test_nested_js_and_ts_configs_trigger_documentation_guidance(tmp_path, path):
+    (tmp_path / "README.md").write_text("# Demo\n", encoding="utf-8")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    graph = RepositoryGraph(files={path})
+
+    report = analyze_impact(tmp_path, graph, [path])
+
+    assert report.documentation_to_review == ["README.md", "docs", "CHANGELOG.md"]
+
+
 def test_recommends_project_test_command_when_no_test_file_matches(tmp_path):
     (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
     graph = RepositoryGraph(files={"src/app.py"})

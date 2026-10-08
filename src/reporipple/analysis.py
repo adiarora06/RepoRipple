@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections import deque
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 from reporipple.models import ImpactedFile, ImpactReport, RepositoryGraph, RiskLevel
@@ -38,6 +39,7 @@ CONFIG_NAMES = {
     "requirements.txt",
     "vercel.json",
 }
+CONFIG_NAME_PATTERNS = ("jsconfig*.json", "tsconfig*.json")
 DOC_EXTENSIONS = {".md", ".mdx", ".rst"}
 
 
@@ -149,7 +151,7 @@ def _documentation_to_review(
         return []
     candidates = ["README.md", "docs", "CHANGELOG.md"]
     docs = [candidate for candidate in candidates if (root / candidate).exists()]
-    if len(impacted) < 3 and not any(Path(path).name.lower() in CONFIG_NAMES for path in changed):
+    if len(impacted) < 3 and not any(_is_configuration(path) for path in changed):
         return []
     return docs
 
@@ -159,7 +161,6 @@ def _risk(
 ) -> tuple[RiskLevel, list[str]]:
     reasons: list[str] = []
     score = 0
-    names = {Path(path).name.lower() for path in changed}
 
     sensitive = sorted(
         {
@@ -183,7 +184,7 @@ def _risk(
         reasons.append(
             "Sensitive dependent files affected: " + _format_sensitive_files(sensitive_impacted)
         )
-    if CONFIG_NAMES & names:
+    if any(_is_configuration(path) for path in changed):
         score += 2
         reasons.append("Runtime, dependency, or deployment configuration changed")
     if len(impacted) >= 10:
@@ -213,6 +214,13 @@ def _sensitive_concepts(path: str) -> set[str]:
             if concept := SENSITIVE_TOKEN_ALIASES.get(token.lower()):
                 concepts.add(concept)
     return concepts
+
+
+def _is_configuration(path: str) -> bool:
+    name = Path(path).name.lower()
+    return name in CONFIG_NAMES or any(
+        fnmatchcase(name, pattern) for pattern in CONFIG_NAME_PATTERNS
+    )
 
 
 def _format_sensitive_files(files: list[tuple[str, list[str]]], limit: int = 3) -> str:
