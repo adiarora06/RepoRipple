@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from reporipple import __version__
 from reporipple.analysis import analyze_impact
 from reporipple.explain import (
     ExplanationError,
@@ -28,6 +29,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="reporipple",
         description="Trace the blast radius of a Git change before it surprises you.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="Show the installed RepoRipple version and exit",
     )
     parser.add_argument(
         "path", nargs="?", default=".", help="Repository path (default: current directory)"

@@ -232,6 +232,7 @@ responses after processing; it does not mean the request stays on your machine. 
 
 ```text
 reporipple [PATH]
+  --version             show the installed RepoRipple version and exit
   --base REVISION       compare REVISION...HEAD
   --changed PATH        analyze an explicit path; repeat as needed
   --max-depth N         reverse dependency traversal depth (default: 4)
