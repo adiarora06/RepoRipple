@@ -2,6 +2,19 @@
 
 All notable changes to RepoRipple are documented here.
 
+## Unreleased
+
+### Added
+
+- A conventional `reporipple --version` command for installation diagnostics and support reports.
+
+### Changed
+
+- GitHub Actions are pinned to their current releases, release jobs no longer cache mutable Python
+  packages, and concurrent runs for the same release tag are serialized.
+- Dependabot now groups GitHub Actions updates and waits seven days before proposing routine version
+  updates, reducing automated pull-request noise without delaying security updates.
+
 ## 0.4.0 - 2026-10-08
 
 ### Added
