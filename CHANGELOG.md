@@ -7,6 +7,8 @@ All notable changes to RepoRipple are documented here.
 ### Added
 
 - A conventional `reporipple --version` command for installation diagnostics and support reports.
+- Configuration-aware impact tracing from `tsconfig.json`, `jsconfig.json`, their local `extends`
+  chains, and `package.json` manifests to governed JS/TS files and workspace importers.
 
 ### Changed
 
@@ -14,6 +16,17 @@ All notable changes to RepoRipple are documented here.
   packages, and concurrent runs for the same release tag are serialized.
 - Dependabot now groups GitHub Actions updates and waits seven days before proposing routine version
   updates, reducing automated pull-request noise without delaying security updates.
+- Metadata-only changes now continue through ordinary reverse imports, while source-file inventory
+  and the public report and MCP response shapes remain unchanged.
+- Deleted project configs and root manifests remain historical impact targets without controlling
+  current alias, inherited `baseUrl`, or workspace resolution; extensionless `extends` prefers a
+  live fallback, deleted config chains are not traversed, package history stops at the nearest live
+  boundary, and unmatched external imports no longer depend on the root workspace manifest.
+- Configuration traversal and metadata storage now have explicit deterministic work and memory
+  budgets, including 64 loaded config nodes per top-level resolution and 100,000 repository-wide
+  source-to-metadata relationships. Loaded live config paths take priority over historical paths
+  in the per-source metadata cap.
+- The README overview is more concise and no longer embeds a large hero image.
 
 ## 0.4.0 - 2026-10-08
 

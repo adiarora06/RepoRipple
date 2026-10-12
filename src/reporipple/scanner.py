@@ -98,6 +98,10 @@ def scan_repository(
     )
 
     for relative in sorted(files):
+        if PurePosixPath(relative).suffix.lower() in JAVASCRIPT_EXTENSIONS:
+            javascript.index_metadata(relative)
+
+    for relative in sorted(files):
         path = root / relative
         if relative in virtual_sources:
             content = virtual_sources[relative]
@@ -125,7 +129,13 @@ def scan_repository(
         elif path.suffix.lower() in JAVASCRIPT_EXTENSIONS:
             graph.edges.extend(_javascript_edges(relative, content, javascript))
 
+    for relative in sorted(files):
+        if PurePosixPath(relative).suffix.lower() in JAVASCRIPT_EXTENSIONS:
+            graph.metadata_edges.extend(_javascript_metadata_edges(relative, javascript))
+
     graph.edges = sorted(set(graph.edges), key=lambda edge: (edge.source, edge.target, edge.kind))
+    # The resolver stores a set per source and each source is emitted once, so this list is unique.
+    graph.metadata_edges.sort(key=lambda edge: (edge.source, edge.target, edge.kind))
     return graph
 
 
@@ -361,4 +371,14 @@ def _javascript_edges(
     return [
         DependencyEdge(source=source, target=target, kind="js-import")
         for _, target in resolver.imports(source, content)
+    ]
+
+
+def _javascript_metadata_edges(
+    source: str,
+    resolver: JavaScriptResolver,
+) -> list[DependencyEdge]:
+    return [
+        DependencyEdge(source=source, target=target, kind=kind)
+        for target, kind in resolver.metadata_dependencies(source)
     ]

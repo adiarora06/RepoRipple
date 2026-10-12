@@ -20,11 +20,12 @@ class RepositoryGraph:
     files: set[str] = field(default_factory=set)
     edges: list[DependencyEdge] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    metadata_edges: list[DependencyEdge] = field(default_factory=list)
 
     @property
     def reverse_dependencies(self) -> dict[str, set[str]]:
         reverse: dict[str, set[str]] = {path: set() for path in self.files}
-        for edge in self.edges:
+        for edge in (*self.edges, *self.metadata_edges):
             reverse.setdefault(edge.target, set()).add(edge.source)
         return reverse
 

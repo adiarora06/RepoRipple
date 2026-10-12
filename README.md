@@ -19,8 +19,6 @@ The deterministic analyzer requires no API key, hosted service, source upload, o
 [MCP setup](https://github.com/adiarora06/RepoRipple/blob/v0.4.0/docs/mcp.md) ·
 [v0.4.0 release](https://github.com/adiarora06/RepoRipple/releases/tag/v0.4.0)
 
-![RepoRipple traces a Git change through its dependency blast radius and produces a focused risk report](https://raw.githubusercontent.com/adiarora06/RepoRipple/v0.4.0/docs/assets/reporipple-hero.png)
-
 ## Why RepoRipple?
 
 Code graphs explain how a repository is connected. RepoRipple applies that graph to the change in front of you:
@@ -159,13 +157,29 @@ MCP server, and optional explanation layer share one deterministic analysis engi
 3. Resolves JS/TS dependencies in a deterministic order: relative paths, the nearest
    `tsconfig.json` or `jsconfig.json` `paths` mappings, its `baseUrl`, and then npm/Yarn workspace
    packages declared by the root `package.json`.
-4. Builds forward and reverse dependency relationships.
-5. Gets added, modified, deleted, and renamed files from an explicit base revision or the local
+4. Records which JS/TS files are governed by project configuration and package manifests.
+5. Builds forward and reverse dependency relationships across source and metadata.
+6. Gets added, modified, deleted, and renamed files from an explicit base revision or the local
    worktree.
-6. Retains pre-change source for deleted and renamed files so their remaining dependents can still
-   be traced.
-7. Traverses dependents to a configurable depth.
-8. Adds test recommendations, documentation reminders, and deterministic risk signals.
+7. Retains pre-change source and resolver metadata for deleted and renamed files so their remaining
+   dependents can still be traced.
+8. Traverses dependents to a configurable depth.
+9. Adds test recommendations, documentation reminders, and deterministic risk signals.
+
+Configuration-only changes now produce a concrete blast radius. Each JS/TS source is linked to its
+nearest `tsconfig.json` or `jsconfig.json`, that configuration's local `extends` chain, and its
+nearest live `package.json`. When Git supplies a deleted or renamed manifest, RepoRipple retains
+the nearest historical package boundary below the current live boundary as a second impact target
+without letting it shadow that live ancestor. A deleted project config likewise remains an impact
+target but cannot supply aliases or `baseUrl` for the current tree, including when a live config
+still names it in `extends`. For extensionless `extends`, a live fallback is preferred while a
+deleted candidate remains direct historical metadata. Deleted config chains are not traversed;
+this prevents stale history from consuming work needed for the live graph. Successfully matched
+workspace imports are additionally linked to the root workspace manifest and the imported
+package's manifest; unrelated external imports are not. Changing any of that metadata reports
+directly governed or dependent source files first, then continues through their downstream
+importers. Metadata remains outside the source-file inventory, while its deterministic
+relationships are included in the reported graph edge count.
 
 Workspace resolution is local and source-aware. RepoRipple matches imports to explicitly declared
 `package.json` workspaces by package name, respects their public export boundaries, and follows
@@ -185,10 +199,18 @@ RepoRipple does not inspect installed `node_modules`, contact a registry, or run
 missing build output are not currently resolved. Pathological workspace glob sets that exceed the
 resolver's fixed safety budgets fail closed instead of consuming unbounded scan time. The current
 limits are 512 effective patterns, 2,048 aggregate path components across unique patterns, 64 KiB
-of raw patterns, and 256 KiB after brace expansion; a scan warning identifies this case. Changes
-to `tsconfig.json`, `jsconfig.json`, and package manifests are flagged as configuration risk, but
-those metadata files are not themselves graph nodes, so a metadata-only change does not yet
-enumerate every affected importer.
+of raw patterns, and 256 KiB after brace expansion. Project-config traversal is limited to 16
+levels, 64 loaded config nodes per root resolution, and 64 config metadata dependencies per
+source. A repository scan stores at most 100,000 unique source-to-metadata relationships. Scan
+warnings identify every exceeded limit, and completed top-level config resolutions are reused
+without bypassing cycle or depth checks inside an `extends` traversal. Loaded live config paths
+have priority in the per-source metadata cap; skipped live targets are next, and direct historical
+targets use the remaining capacity. Changes to `tsconfig.json`, `jsconfig.json`, and package
+manifests are both flagged as configuration risk and traced through their governed or dependent
+JS/TS files. Deleted and renamed metadata uses the same bounded in-memory Git overlay as deleted
+source. For an in-place workspace-manifest edit that removes an old package name entirely,
+RepoRipple can still report files owned by that package, but cannot reconstruct importers of the
+removed name without a second full historical scan.
 
 The core intentionally avoids LLM scoring. Results stay reproducible, private, fast, and usable in CI. Optional AI explanations can be layered over the JSON output without making correctness depend on a model.
 
@@ -259,6 +281,7 @@ When no base or explicit path is supplied, RepoRipple analyzes staged, unstaged,
 | JavaScript/TypeScript relative imports | Supported |
 | JavaScript/TypeScript `paths` and `baseUrl` aliases | Supported |
 | npm/Yarn `package.json` workspace package imports | Supported |
+| Config and package-manifest change impact | Supported |
 | Deleted and renamed source files | Supported |
 | Reverse-dependency paths | Supported |
 | Test-file recommendations | Supported |

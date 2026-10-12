@@ -67,7 +67,7 @@ def analyze_impact(
         risk_level=risk_level,
         risk_reasons=reasons,
         graph_files=len(graph.files),
-        graph_edges=len(graph.edges),
+        graph_edges=len(graph.edges) + len(graph.metadata_edges),
         warnings=graph.warnings,
     )
 
@@ -78,7 +78,9 @@ def _trace_impacted(
     reverse = graph.reverse_dependencies
     changed_set = set(changed)
     queue: deque[tuple[str, int, tuple[str, ...]]] = deque(
-        (path, 0, (path,)) for path in changed if path in graph.files
+        (path, 0, (path,))
+        for path in changed
+        if path in graph.files or path in reverse
     )
     best_distance: dict[str, int] = {}
     best_path: dict[str, tuple[str, ...]] = {}
