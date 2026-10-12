@@ -282,6 +282,36 @@ def test_virtual_deleted_workspace_manifest_reaches_owned_source_and_importer(tm
     )] == ["packages/removed/src/index.ts", "src/app.ts"]
 
 
+def test_deleted_nested_manifest_does_not_shadow_live_ancestor_governance(tmp_path):
+    write_json(tmp_path, "package.json", {"name": "root", "type": "module"})
+    write(tmp_path, "packages/app/src/app.ts", "export {};\n")
+
+    graph = scan_repository(
+        tmp_path,
+        virtual_files={
+            "packages/app/package.json": json.dumps(
+                {"name": "removed-app", "type": "commonjs"}
+            )
+        },
+    )
+
+    assert impacted(graph, tmp_path, "packages/app/package.json") == [
+        (
+            "packages/app/src/app.ts",
+            1,
+            ("packages/app/package.json", "packages/app/src/app.ts"),
+        )
+    ]
+    assert impacted(graph, tmp_path, "package.json") == [
+        ("packages/app/src/app.ts", 1, ("package.json", "packages/app/src/app.ts"))
+    ]
+    assert {
+        edge.target
+        for edge in graph.metadata_edges
+        if edge.source == "packages/app/src/app.ts" and edge.kind == "package-manifest"
+    } == {"package.json", "packages/app/package.json"}
+
+
 def test_configuration_relations_do_not_change_source_inventory_or_import_edges(tmp_path):
     write_json(tmp_path, "tsconfig.json", {})
     write_json(tmp_path, "package.json", {"name": "demo"})

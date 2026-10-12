@@ -111,7 +111,7 @@ class JavaScriptResolver:
         self._source_config_cache: dict[str, _ProjectConfig | None] = {}
         self._source_config_metadata_cache: dict[str, tuple[str, ...]] = {}
         self._source_metadata: dict[str, set[tuple[str, str]]] = {}
-        self._source_manifest_cache: dict[str, str | None] = {}
+        self._source_manifest_cache: dict[str, tuple[str, ...]] = {}
         self._manifest_cache: dict[str, Mapping[str, Any] | None] = {}
         self._workspaces = self._build_workspace_index()
 
@@ -761,28 +761,35 @@ class JavaScriptResolver:
             self._record_metadata(source, path, "js-config")
 
     def _record_package_governance(self, source: str) -> None:
-        manifest = self._nearest_package_manifest(source)
-        if manifest is not None:
+        for manifest in self._governing_package_manifests(source):
             self._record_metadata(source, manifest, "package-manifest")
 
-    def _nearest_package_manifest(self, source: str) -> str | None:
+    def _governing_package_manifests(self, source: str) -> tuple[str, ...]:
         parent = PurePosixPath(source).parent
         key = parent.as_posix()
         if key in self._source_manifest_cache:
             return self._source_manifest_cache[key]
 
+        historical: str | None = None
+        live: str | None = None
         current = parent
         while True:
             candidate = (current / "package.json").as_posix()
             if self._metadata_exists(candidate):
-                self._source_manifest_cache[key] = candidate
-                return candidate
+                if self._metadata_is_virtual_only(candidate):
+                    if historical is None:
+                        historical = candidate
+                elif live is None:
+                    live = candidate
             if current == PurePosixPath("."):
                 break
             current = current.parent
 
-        self._source_manifest_cache[key] = None
-        return None
+        # One current and one historical package boundary are sufficient: more distant manifests
+        # from either snapshot are shadowed by their nearer counterpart.
+        manifests = tuple(path for path in (historical, live) if path is not None)
+        self._source_manifest_cache[key] = manifests
+        return manifests
 
     def _record_metadata(self, source: str, target: str, kind: str) -> None:
         if target != source:

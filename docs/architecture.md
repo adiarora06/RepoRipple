@@ -67,8 +67,9 @@ relationship uniformly:
 - A JS/TS file depends on its nearest `tsconfig.json` or `jsconfig.json` and every successfully
   located local configuration in that file's `extends` chain. Malformed configs still retain the
   relationship so fixing them produces a useful blast radius.
-- A JS/TS file depends on its nearest `package.json`, which governs its package boundary and module
-  interpretation.
+- A JS/TS file depends on its nearest live `package.json`, which governs its current package
+  boundary and module interpretation. A deleted or renamed nearest manifest is retained as one
+  additional historical dependency while ancestor search continues for the live boundary.
 - A bare workspace import also depends on the root workspace manifest and the resolved workspace
   package manifest, because either can change the binding or public entry point.
 

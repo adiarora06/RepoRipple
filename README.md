@@ -168,11 +168,13 @@ MCP server, and optional explanation layer share one deterministic analysis engi
 
 Configuration-only changes now produce a concrete blast radius. Each JS/TS source is linked to its
 nearest `tsconfig.json` or `jsconfig.json`, that configuration's local `extends` chain, and its
-nearest `package.json`. Workspace importers are additionally linked to the root workspace manifest
-and the imported package's manifest. Changing any of that metadata reports directly governed or
-dependent source files first, then continues through their downstream importers. Metadata remains
-outside the source-file inventory, while its deterministic relationships are included in the
-reported graph edge count.
+nearest live `package.json`. When Git supplies a deleted or renamed manifest, RepoRipple retains
+the nearest historical package boundary as a second impact target without letting it shadow the
+live ancestor. Workspace importers are additionally linked to the root workspace manifest and the
+imported package's manifest. Changing any of that metadata reports directly governed or dependent
+source files first, then continues through their downstream importers. Metadata remains outside
+the source-file inventory, while its deterministic relationships are included in the reported
+graph edge count.
 
 Workspace resolution is local and source-aware. RepoRipple matches imports to explicitly declared
 `package.json` workspaces by package name, respects their public export boundaries, and follows
