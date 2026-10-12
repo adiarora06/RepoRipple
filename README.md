@@ -192,7 +192,8 @@ RepoRipple does not inspect installed `node_modules`, contact a registry, or run
 missing build output are not currently resolved. Pathological workspace glob sets that exceed the
 resolver's fixed safety budgets fail closed instead of consuming unbounded scan time. The current
 limits are 512 effective patterns, 2,048 aggregate path components across unique patterns, 64 KiB
-of raw patterns, and 256 KiB after brace expansion; a scan warning identifies this case. Changes
+of raw patterns, and 256 KiB after brace expansion. Project-config traversal is limited to 16
+levels and 64 metadata dependencies per source. Scan warnings identify exceeded limits. Changes
 to `tsconfig.json`, `jsconfig.json`, and package manifests are both flagged as configuration risk
 and traced through their governed or dependent JS/TS files. Deleted and renamed metadata uses the
 same bounded in-memory Git overlay as deleted source. For an in-place workspace-manifest edit that

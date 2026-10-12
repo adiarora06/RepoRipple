@@ -295,3 +295,51 @@ def test_configuration_relations_do_not_change_source_inventory_or_import_edges(
         ("package.json", "package-manifest"),
         ("tsconfig.json", "js-config"),
     }
+
+
+def test_prewarmed_config_cache_cannot_bypass_extends_depth_limit(tmp_path):
+    config_count = 40
+    for index in range(config_count):
+        payload = (
+            {}
+            if index == 0
+            else {"extends": f"../p{index - 1:03}/tsconfig.json"}
+        )
+        write_json(tmp_path, f"p{index:03}/tsconfig.json", payload)
+        write(tmp_path, f"p{index:03}/app.ts", "export {};\n")
+
+    graph = scan_repository(tmp_path)
+
+    deepest_edges = [
+        edge
+        for edge in graph.metadata_edges
+        if edge.source == "p039/app.ts" and edge.kind == "js-config"
+    ]
+    all_config_edges = [
+        edge for edge in graph.metadata_edges if edge.kind == "js-config"
+    ]
+    assert len(deepest_edges) == 16
+    assert len(all_config_edges) <= config_count * 16
+    assert any("extends depth exceeded" in warning for warning in graph.warnings)
+
+
+def test_wide_extends_graph_has_a_bounded_metadata_impact_set(tmp_path):
+    base_count = 80
+    for index in range(base_count):
+        write_json(tmp_path, f"config/base-{index:03}.json", {})
+    write_json(
+        tmp_path,
+        "tsconfig.json",
+        {"extends": [f"./config/base-{index:03}.json" for index in range(base_count)]},
+    )
+    write(tmp_path, "src/app.ts", "export {};\n")
+
+    graph = scan_repository(tmp_path)
+
+    config_edges = [
+        edge
+        for edge in graph.metadata_edges
+        if edge.source == "src/app.ts" and edge.kind == "js-config"
+    ]
+    assert len(config_edges) == 64
+    assert any("dependency count exceeded" in warning for warning in graph.warnings)

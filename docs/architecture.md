@@ -81,12 +81,14 @@ RepoRipple does not inspect `node_modules`, execute a package manager, or parse
 `pnpm-workspace.yaml`. Consequently, configurations whose only targets are ignored or unavailable
 build artifacts can remain unresolved. Pathological workspace glob sets that exceed fixed matching
 budgets fail closed with a warning: 512 effective patterns, 2,048 aggregate path components across
-unique patterns, 64 KiB of raw patterns, and 256 KiB after brace expansion. Resolver metadata
-changes receive configuration-risk and documentation signals and now enumerate governed sources
-and currently identifiable importers. Historical overlays preserve deleted and renamed metadata.
-An in-place manifest edit that completely removes a workspace's old package name cannot identify
-external importers of that former name without constructing a second historical graph; sources
-owned by the edited package remain visible.
+unique patterns, 64 KiB of raw patterns, and 256 KiB after brace expansion. Project-config
+traversal is separately capped at 16 levels and 64 metadata dependencies per source, including
+when parsed configs are reused from cache. Resolver metadata changes receive configuration-risk
+and documentation signals and now enumerate governed sources and currently identifiable importers.
+Historical overlays preserve deleted and renamed metadata. An in-place manifest edit that
+completely removes a workspace's old package name cannot identify external importers of that
+former name without constructing a second historical graph; sources owned by the edited package
+remain visible.
 
 ## Relationship to Graphify
 

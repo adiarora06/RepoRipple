@@ -22,6 +22,7 @@ JS_IMPORT_PATTERN = re.compile(
 )
 _CONFIG_NAMES = ("tsconfig.json", "jsconfig.json")
 _MAX_CONFIG_DEPTH = 16
+_MAX_CONFIG_METADATA_PATHS = 64
 _MAX_EXPORT_DEPTH = 64
 _MAX_WORKSPACE_BRACE_EXPANSIONS = 64
 _MAX_WORKSPACE_MATCH_STATES = 100_000
@@ -106,7 +107,7 @@ class JavaScriptResolver:
         self.warnings = warnings
         self.virtual_files = dict(virtual_files or {})
         self._warning_set = set(warnings)
-        self._config_cache: dict[str, _ProjectConfig | None] = {}
+        self._config_payload_cache: dict[str, Mapping[str, Any] | None] = {}
         self._source_config_cache: dict[str, _ProjectConfig | None] = {}
         self._source_config_metadata_cache: dict[str, tuple[str, ...]] = {}
         self._source_metadata: dict[str, set[tuple[str, str]]] = {}
@@ -269,18 +270,21 @@ class JavaScriptResolver:
         relative: str,
         stack: tuple[str, ...],
     ) -> _ProjectConfig | None:
-        if relative in self._config_cache:
-            return self._config_cache[relative]
         if relative in stack:
             self._warn(f"JavaScript configuration extends cycle detected at {relative}")
             return _ProjectConfig(metadata_paths=(relative,))
         if len(stack) >= _MAX_CONFIG_DEPTH:
             self._warn(f"JavaScript configuration extends depth exceeded at {relative}")
-            return _ProjectConfig(metadata_paths=(relative,))
+            return _ProjectConfig()
 
-        payload = self._read_json(relative, jsonc=True, label="JavaScript configuration")
+        if relative not in self._config_payload_cache:
+            self._config_payload_cache[relative] = self._read_json(
+                relative,
+                jsonc=True,
+                label="JavaScript configuration",
+            )
+        payload = self._config_payload_cache[relative]
         if payload is None:
-            self._config_cache[relative] = None
             return None
 
         parent = _ProjectConfig()
@@ -308,6 +312,10 @@ class JavaScriptResolver:
                     parent = _merge_project_configs(parent, loaded)
                 else:
                     parent = _with_project_metadata(parent, inherited)
+                parent = _with_project_metadata_paths(
+                    parent,
+                    self._bounded_config_metadata(parent.metadata_paths, relative),
+                )
 
         compiler = payload.get("compilerOptions", {})
         if not isinstance(compiler, dict):
@@ -349,15 +357,32 @@ class JavaScriptResolver:
                 config_directory,
             )
 
-        config = _ProjectConfig(
+        metadata_paths = self._bounded_config_metadata(
+            (*parent.metadata_paths, relative),
+            relative,
+        )
+        return _ProjectConfig(
             base_url=base_url,
             path_rules=path_rules,
             defines_base_url=defines_base_url,
             defines_path_rules=defines_path_rules,
-            metadata_paths=tuple(dict.fromkeys((*parent.metadata_paths, relative))),
+            metadata_paths=metadata_paths,
         )
-        self._config_cache[relative] = config
-        return config
+
+    def _bounded_config_metadata(
+        self,
+        paths: Iterable[str],
+        owner: str,
+    ) -> tuple[str, ...]:
+        unique = tuple(dict.fromkeys(paths))
+        if len(unique) <= _MAX_CONFIG_METADATA_PATHS:
+            return unique
+        self._warn(
+            f"JavaScript configuration dependency count exceeded at {owner}; "
+            f"metadata impact was limited to {_MAX_CONFIG_METADATA_PATHS} files"
+        )
+        # Keep the nearest dependencies and the owning config, which are appended last.
+        return unique[-_MAX_CONFIG_METADATA_PATHS:]
 
     def _resolve_extends(self, owner: str, value: str) -> str | None:
         owner_directory = self.root / PurePosixPath(owner).parent
@@ -966,12 +991,22 @@ def _merge_project_configs(
 
 
 def _with_project_metadata(config: _ProjectConfig, relative: str) -> _ProjectConfig:
+    return _with_project_metadata_paths(
+        config,
+        tuple(dict.fromkeys((*config.metadata_paths, relative))),
+    )
+
+
+def _with_project_metadata_paths(
+    config: _ProjectConfig,
+    metadata_paths: tuple[str, ...],
+) -> _ProjectConfig:
     return _ProjectConfig(
         base_url=config.base_url,
         path_rules=config.path_rules,
         defines_base_url=config.defines_base_url,
         defines_path_rules=config.defines_path_rules,
-        metadata_paths=tuple(dict.fromkeys((*config.metadata_paths, relative))),
+        metadata_paths=metadata_paths,
     )
 
 
