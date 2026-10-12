@@ -413,7 +413,7 @@ def test_wide_extends_graph_has_a_bounded_metadata_impact_set(tmp_path):
     assert any("dependency count exceeded" in warning for warning in graph.warnings)
 
 
-def test_live_and_historical_config_metadata_share_one_bounded_impact_set(tmp_path):
+def test_saturated_live_config_metadata_takes_priority_over_historical_top_level(tmp_path):
     parent_count = 70
     for prefix in ("current", "historical"):
         for index in range(parent_count):
@@ -445,7 +445,9 @@ def test_live_and_historical_config_metadata_share_one_bounded_impact_set(tmp_pa
         if edge.source == "src/app.js" and edge.kind == "js-config"
     ]
     assert len(config_edges) == 64
-    assert {edge.target for edge in config_edges} >= {"jsconfig.json", "tsconfig.json"}
+    assert "jsconfig.json" in {edge.target for edge in config_edges}
+    assert "tsconfig.json" not in {edge.target for edge in config_edges}
+    assert not any(edge.target.startswith("config/historical-") for edge in config_edges)
     assert any("dependency count exceeded" in warning for warning in graph.warnings)
 
 
@@ -566,6 +568,207 @@ def test_historical_only_config_cannot_override_live_workspace_resolution(tmp_pa
         ("tsconfig.json", "js-config"),
         ("package.json", "package-manifest"),
         ("packages/shared/package.json", "package-manifest"),
+    }
+
+
+def test_live_config_keeps_deleted_extended_paths_as_metadata_only(tmp_path):
+    write_json(tmp_path, "package.json", {"workspaces": ["packages/*"]})
+    write_json(tmp_path, "apps/web/tsconfig.json", {"extends": "./config/deleted.json"})
+    write_json(
+        tmp_path,
+        "packages/shared/package.json",
+        {"name": "shared", "source": "./src/index.ts"},
+    )
+    write(tmp_path, "packages/shared/src/index.ts", "export const source = 'workspace';\n")
+    write(tmp_path, "legacy/stale.ts", "export const source = 'stale';\n")
+    write(tmp_path, "apps/web/src/app.ts", 'import { source } from "shared";\n')
+
+    graph = scan_repository(
+        tmp_path,
+        virtual_files={
+            "apps/web/config/deleted.json": json.dumps(
+                {
+                    "compilerOptions": {
+                        "paths": {"shared": ["../../../legacy/stale.ts"]}
+                    }
+                }
+            )
+        },
+    )
+
+    assert {
+        edge.target for edge in graph.edges if edge.source == "apps/web/src/app.ts"
+    } == {"packages/shared/src/index.ts"}
+    assert {
+        edge.target
+        for edge in graph.metadata_edges
+        if edge.source == "apps/web/src/app.ts" and edge.kind == "js-config"
+    } == {"apps/web/config/deleted.json", "apps/web/tsconfig.json"}
+    assert impacted(graph, tmp_path, "apps/web/config/deleted.json") == [
+        (
+            "apps/web/src/app.ts",
+            1,
+            ("apps/web/config/deleted.json", "apps/web/src/app.ts"),
+        )
+    ]
+    assert impacted(graph, tmp_path, "apps/web/tsconfig.json") == [
+        (
+            "apps/web/src/app.ts",
+            1,
+            ("apps/web/tsconfig.json", "apps/web/src/app.ts"),
+        )
+    ]
+
+
+def test_live_config_does_not_inherit_base_url_from_deleted_extended_config(tmp_path):
+    write_json(tmp_path, "apps/web/tsconfig.json", {"extends": "./config/deleted.json"})
+    write(tmp_path, "legacy/value.ts", "export {};\n")
+    write(tmp_path, "apps/web/src/app.ts", 'import "value";\n')
+
+    graph = scan_repository(
+        tmp_path,
+        virtual_files={
+            "apps/web/config/deleted.json": json.dumps(
+                {"compilerOptions": {"baseUrl": "../../../legacy"}}
+            )
+        },
+    )
+
+    assert not any(edge.source == "apps/web/src/app.ts" for edge in graph.edges)
+    assert {
+        edge.target
+        for edge in graph.metadata_edges
+        if edge.source == "apps/web/src/app.ts" and edge.kind == "js-config"
+    } == {"apps/web/config/deleted.json", "apps/web/tsconfig.json"}
+
+
+def test_extensionless_extends_prefers_live_fallback_and_keeps_deleted_candidate(tmp_path):
+    write_json(tmp_path, "package.json", {"workspaces": ["packages/*"]})
+    write_json(tmp_path, "apps/web/tsconfig.json", {"extends": "./config"})
+    write_json(
+        tmp_path,
+        "apps/web/config/tsconfig.json",
+        {"compilerOptions": {"paths": {"@live": ["../src/live.ts"]}}},
+    )
+    write_json(
+        tmp_path,
+        "packages/shared/package.json",
+        {"name": "shared", "source": "./src/index.ts"},
+    )
+    write(tmp_path, "packages/shared/src/index.ts", "export {};\n")
+    write(tmp_path, "legacy/stale.ts", "export {};\n")
+    write(tmp_path, "apps/web/src/live.ts", "export {};\n")
+    write(tmp_path, "apps/web/src/app.ts", 'import "shared";\nimport "@live";\n')
+
+    graph = scan_repository(
+        tmp_path,
+        virtual_files={
+            "apps/web/config.json": json.dumps(
+                {
+                    "compilerOptions": {
+                        "paths": {"shared": ["../../legacy/stale.ts"]}
+                    }
+                }
+            )
+        },
+    )
+
+    assert {
+        edge.target for edge in graph.edges if edge.source == "apps/web/src/app.ts"
+    } == {"apps/web/src/live.ts", "packages/shared/src/index.ts"}
+    assert {
+        edge.target
+        for edge in graph.metadata_edges
+        if edge.source == "apps/web/src/app.ts" and edge.kind == "js-config"
+    } == {
+        "apps/web/config.json",
+        "apps/web/config/tsconfig.json",
+        "apps/web/tsconfig.json",
+    }
+
+
+def test_active_config_metadata_has_priority_over_saturated_history(tmp_path):
+    historical_paths = [f"deleted/base-{index:02}.json" for index in range(64)]
+    write_json(
+        tmp_path,
+        "tsconfig.json",
+        {
+            "extends": [
+                *(f"./{path}" for path in historical_paths),
+                "./config/live.json",
+            ]
+        },
+    )
+    write_json(
+        tmp_path,
+        "config/live.json",
+        {"compilerOptions": {"paths": {"@live": ["../src/live.ts"]}}},
+    )
+    write(tmp_path, "src/live.ts", "export {};\n")
+    write(tmp_path, "src/app.ts", 'import "@live";\n')
+
+    graph = scan_repository(
+        tmp_path,
+        virtual_files={path: "{}" for path in historical_paths},
+    )
+
+    assert {
+        edge.target for edge in graph.edges if edge.source == "src/app.ts"
+    } == {"src/live.ts"}
+    metadata_targets = {
+        edge.target
+        for edge in graph.metadata_edges
+        if edge.source == "src/app.ts" and edge.kind == "js-config"
+    }
+    assert len(metadata_targets) == 64
+    assert metadata_targets >= {
+        "config/live.json",
+        "deleted/base-63.json",
+        "tsconfig.json",
+    }
+    assert metadata_targets.isdisjoint({"deleted/base-00.json", "deleted/base-01.json"})
+    assert any("dependency count exceeded" in warning for warning in graph.warnings)
+
+
+def test_nested_historical_extends_cannot_starve_later_live_sibling(tmp_path):
+    historical_paths = [f"deleted/base-{index:02}.json" for index in range(62)]
+    write_json(
+        tmp_path,
+        "tsconfig.json",
+        {"extends": ["./config/a.json", "./config/b.json"]},
+    )
+    write_json(
+        tmp_path,
+        "config/a.json",
+        {"extends": [f"../{path}" for path in historical_paths]},
+    )
+    write_json(
+        tmp_path,
+        "config/b.json",
+        {"compilerOptions": {"paths": {"@live": ["../src/live.ts"]}}},
+    )
+    write(tmp_path, "src/live.ts", "export {};\n")
+    write(tmp_path, "src/app.ts", 'import "@live";\n')
+
+    graph = scan_repository(
+        tmp_path,
+        virtual_files={path: "{}" for path in historical_paths},
+    )
+
+    assert {
+        edge.target for edge in graph.edges if edge.source == "src/app.ts"
+    } == {"src/live.ts"}
+    metadata_targets = {
+        edge.target
+        for edge in graph.metadata_edges
+        if edge.source == "src/app.ts" and edge.kind == "js-config"
+    }
+    assert len(metadata_targets) == 64
+    assert metadata_targets >= {
+        "config/a.json",
+        "config/b.json",
+        "deleted/base-61.json",
+        "tsconfig.json",
     }
 
 

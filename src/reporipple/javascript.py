@@ -7,6 +7,7 @@ import posixpath
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -96,6 +97,14 @@ class _ConditionalTargets:
 @dataclass
 class _ConfigLoadBudget:
     loaded: int = 0
+    skipped_current_paths: dict[str, None] = dataclass_field(default_factory=dict)
+    historical_paths: dict[str, None] = dataclass_field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class _ResolvedExtends:
+    current: str | None = None
+    historical: tuple[str, ...] = ()
 
 
 class JavaScriptResolver:
@@ -218,7 +227,7 @@ class JavaScriptResolver:
             self._record_config_metadata(source, key)
             return self._source_config_cache[key]
 
-        historical: tuple[str, _ProjectConfig | None] | None = None
+        historical: str | None = None
         current = parent
         while True:
             candidates = [
@@ -233,11 +242,15 @@ class JavaScriptResolver:
                 path for path in candidates if self._metadata_is_virtual_only(path)
             ]
             if historical is None and historical_candidates:
-                historical_path = historical_candidates[0]
-                historical = (
-                    historical_path,
-                    self._load_project_config(historical_path),
-                )
+                historical = historical_candidates[0]
+                # Validate once for useful read/parse warnings, but never traverse or apply stale
+                # compiler options from a config that no longer exists in the current tree.
+                if historical not in self._config_payload_cache:
+                    self._config_payload_cache[historical] = self._read_json(
+                        historical,
+                        jsonc=True,
+                        label="JavaScript configuration",
+                    )
 
             if live_candidates:
                 candidate = live_candidates[0]
@@ -245,24 +258,17 @@ class JavaScriptResolver:
                 self._source_config_cache[key] = config
                 active_paths = list((candidate,) if config is None else config.metadata_paths)
                 paths: list[str] = []
-                required_paths = [candidate]
 
                 # Deleted or renamed configs remain historical impact targets, but they must not
                 # shadow the live config that controls current import resolution.
                 if historical is not None:
-                    historical_path, historical_config = historical
-                    required_paths.append(historical_path)
-                    paths.extend(
-                        (historical_path,)
-                        if historical_config is None
-                        else historical_config.metadata_paths
-                    )
+                    paths.append(historical)
                 paths.extend(active_paths)
 
                 self._source_config_metadata_cache[key] = self._bounded_config_metadata(
                     paths,
                     candidate,
-                    required=required_paths,
+                    required=active_paths,
                 )
                 self._record_config_metadata(source, key)
                 return config
@@ -271,10 +277,8 @@ class JavaScriptResolver:
             current = current.parent
 
         if historical is not None:
-            candidate, config = historical
             self._source_config_cache[key] = None
-            paths = (candidate,) if config is None else config.metadata_paths
-            self._source_config_metadata_cache[key] = tuple(dict.fromkeys(paths))
+            self._source_config_metadata_cache[key] = (historical,)
             self._record_config_metadata(source, key)
             return None
 
@@ -291,6 +295,21 @@ class JavaScriptResolver:
 
         budget = _ConfigLoadBudget()
         config = self._load_project_config_node(relative, (), budget)
+        if config is not None:
+            # Loaded current paths are authoritative. Skipped current paths are next in priority;
+            # direct historical targets use only whatever space remains in the combined cap.
+            config = _with_project_metadata_paths(
+                config,
+                self._bounded_config_metadata(
+                    (
+                        *budget.historical_paths,
+                        *budget.skipped_current_paths,
+                        *config.metadata_paths,
+                    ),
+                    relative,
+                    required=config.metadata_paths,
+                ),
+            )
         self._root_config_cache[relative] = config
         return config
 
@@ -335,6 +354,7 @@ class JavaScriptResolver:
         else:
             extend_values = [extends]
 
+        resolved_extends: list[_ResolvedExtends] = []
         for extend_value in extend_values:
             if not isinstance(extend_value, str) or not extend_value:
                 self._warn(f"Invalid extends value in {relative}; expected relative strings")
@@ -342,28 +362,40 @@ class JavaScriptResolver:
             if not extend_value.startswith("."):
                 self._warn(f"Unsupported package-based extends in {relative}: {extend_value!r}")
                 continue
-            inherited = self._resolve_extends(relative, extend_value)
-            if inherited is not None:
-                if budget.loaded >= _MAX_CONFIG_LOADS:
-                    self._warn(
-                        "JavaScript configuration load budget exceeded; "
-                        f"analysis was limited to {_MAX_CONFIG_LOADS} config nodes per root"
+            resolved = self._resolve_extends(relative, extend_value)
+            if resolved is not None:
+                resolved_extends.append(resolved)
+                for historical_path in resolved.historical:
+                    self._remember_config_candidate(
+                        budget.historical_paths,
+                        historical_path,
                     )
-                    parent = _with_project_metadata(parent, inherited)
-                else:
-                    loaded = self._load_project_config_node(
-                        inherited,
-                        (*stack, relative),
-                        budget,
-                    )
-                    if loaded is not None:
-                        parent = _merge_project_configs(parent, loaded)
-                    else:
-                        parent = _with_project_metadata(parent, inherited)
-                parent = _with_project_metadata_paths(
-                    parent,
-                    self._bounded_config_metadata(parent.metadata_paths, relative),
+
+        # Only live targets consume the traversal budget or contribute compiler options. Deleted
+        # candidates are retained directly as bounded metadata by the root resolution.
+        for resolved in resolved_extends:
+            if resolved.current is None:
+                continue
+            inherited = resolved.current
+            if budget.loaded >= _MAX_CONFIG_LOADS:
+                self._warn(
+                    "JavaScript configuration load budget exceeded; "
+                    f"analysis was limited to {_MAX_CONFIG_LOADS} config nodes per root"
                 )
+                self._remember_config_candidate(
+                    budget.skipped_current_paths,
+                    inherited,
+                )
+                continue
+            loaded = self._load_project_config_node(inherited, (*stack, relative), budget)
+            if loaded is not None:
+                parent = _merge_project_configs(parent, loaded)
+            else:
+                parent = _with_project_metadata(parent, inherited)
+            parent = _with_project_metadata_paths(
+                parent,
+                self._bounded_config_metadata(parent.metadata_paths, relative),
+            )
 
         compiler = payload.get("compilerOptions", {})
         if not isinstance(compiler, dict):
@@ -417,6 +449,14 @@ class JavaScriptResolver:
             metadata_paths=metadata_paths,
         )
 
+    @staticmethod
+    def _remember_config_candidate(paths: dict[str, None], relative: str) -> None:
+        if relative in paths:
+            return
+        paths[relative] = None
+        if len(paths) > _MAX_CONFIG_METADATA_PATHS:
+            del paths[next(iter(paths))]
+
     def _bounded_config_metadata(
         self,
         paths: Iterable[str],
@@ -444,7 +484,7 @@ class JavaScriptResolver:
             if path in required_set or path in retained_optional
         )
 
-    def _resolve_extends(self, owner: str, value: str) -> str | None:
+    def _resolve_extends(self, owner: str, value: str) -> _ResolvedExtends | None:
         owner_directory = self.root / PurePosixPath(owner).parent
         candidate = self._resolve_path(
             owner_directory / value,
@@ -460,10 +500,17 @@ class JavaScriptResolver:
         if not candidate.suffix:
             candidates.insert(0, candidate.with_suffix(".json"))
             candidates.append(candidate / "tsconfig.json")
+        current: str | None = None
+        historical: list[str] = []
         for path in candidates:
             relative = path.relative_to(self.root).as_posix()
             if self._metadata_exists(relative):
-                return relative
+                if self._metadata_is_virtual_only(relative):
+                    historical.append(relative)
+                elif current is None:
+                    current = relative
+        if current is not None or historical:
+            return _ResolvedExtends(current=current, historical=tuple(historical))
         self._warn(f"Relative extends target in {owner} was not found: {value!r}")
         return None
 
