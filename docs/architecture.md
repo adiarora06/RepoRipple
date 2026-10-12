@@ -66,12 +66,15 @@ relationship uniformly:
 
 - A JS/TS file depends on its nearest `tsconfig.json` or `jsconfig.json` and every successfully
   located local configuration in that file's `extends` chain. Malformed configs still retain the
-  relationship so fixing them produces a useful blast radius.
+  relationship so fixing them produces a useful blast radius. Historical-only configs are impact
+  targets, not active alias or `baseUrl` inputs for the current source tree.
 - A JS/TS file depends on its nearest live `package.json`, which governs its current package
-  boundary and module interpretation. A deleted or renamed nearest manifest is retained as one
-  additional historical dependency while ancestor search continues for the live boundary.
-- A bare workspace import also depends on the root workspace manifest and the resolved workspace
-  package manifest, because either can change the binding or public entry point.
+  boundary and module interpretation. A deleted or renamed nearest manifest encountered below
+  that live boundary is retained as one additional historical dependency; historical manifests
+  above the live boundary remain shadowed.
+- A successfully matched bare workspace import also depends on the root workspace manifest and the
+  resolved workspace package manifest, because either can change the binding or public entry
+  point. Unmatched external imports do not acquire that root-manifest relationship.
 
 Metadata paths do not need to be source nodes to seed impact analysis. They are reverse-dependency
 targets, so a metadata-only diff reaches directly governed files at distance one and then follows
@@ -83,10 +86,14 @@ RepoRipple does not inspect `node_modules`, execute a package manager, or parse
 build artifacts can remain unresolved. Pathological workspace glob sets that exceed fixed matching
 budgets fail closed with a warning: 512 effective patterns, 2,048 aggregate path components across
 unique patterns, 64 KiB of raw patterns, and 256 KiB after brace expansion. Project-config
-traversal is separately capped at 16 levels and 64 metadata dependencies per source, including
-when parsed configs are reused from cache. Resolver metadata changes receive configuration-risk
-and documentation signals and now enumerate governed sources and currently identifiable importers.
-Historical overlays preserve deleted and renamed metadata. An in-place manifest edit that
+traversal is separately capped at 16 levels, 64 loaded config nodes per top-level resolution, and
+64 config metadata dependencies per source. Completed top-level resolutions are cached by config
+path; recursive loads are not cached, preserving per-traversal cycle, depth, and work budgets. The
+repository-wide metadata graph is capped at 100,000 unique relationships, with deterministic
+source ordering and warnings when truncation occurs. Resolver metadata changes receive
+configuration-risk and documentation signals and enumerate governed sources and currently
+identifiable importers. Historical overlays preserve deleted and renamed metadata without letting
+deleted root manifests define the current workspace index. An in-place manifest edit that
 completely removes a workspace's old package name cannot identify external importers of that
 former name without constructing a second historical graph; sources owned by the edited package
 remain visible.

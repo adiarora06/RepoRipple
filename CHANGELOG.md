@@ -18,6 +18,12 @@ All notable changes to RepoRipple are documented here.
   updates, reducing automated pull-request noise without delaying security updates.
 - Metadata-only changes now continue through ordinary reverse imports, while source-file inventory
   and the public report and MCP response shapes remain unchanged.
+- Deleted project configs and root manifests remain historical impact targets without controlling
+  current alias or workspace resolution; package history stops at the nearest live boundary, and
+  unmatched external imports no longer depend on the root workspace manifest.
+- Configuration traversal and metadata storage now have explicit deterministic work and memory
+  budgets, including 64 loaded config nodes per top-level resolution and 100,000 repository-wide
+  source-to-metadata relationships.
 - The README overview is more concise and no longer embeds a large hero image.
 
 ## 0.4.0 - 2026-10-08

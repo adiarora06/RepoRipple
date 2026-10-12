@@ -22,7 +22,9 @@ JS_IMPORT_PATTERN = re.compile(
 )
 _CONFIG_NAMES = ("tsconfig.json", "jsconfig.json")
 _MAX_CONFIG_DEPTH = 16
+_MAX_CONFIG_LOADS = 64
 _MAX_CONFIG_METADATA_PATHS = 64
+_MAX_METADATA_RELATIONSHIPS = 100_000
 _MAX_EXPORT_DEPTH = 64
 _MAX_WORKSPACE_BRACE_EXPANSIONS = 64
 _MAX_WORKSPACE_MATCH_STATES = 100_000
@@ -91,6 +93,11 @@ class _ConditionalTargets:
     invalid: bool = False
 
 
+@dataclass
+class _ConfigLoadBudget:
+    loaded: int = 0
+
+
 class JavaScriptResolver:
     """Resolve local JS/TS imports without executing repository configuration."""
 
@@ -101,6 +108,7 @@ class JavaScriptResolver:
         warnings: list[str],
         *,
         virtual_files: Mapping[str, str] | None = None,
+        max_metadata_relationships: int = _MAX_METADATA_RELATIONSHIPS,
     ) -> None:
         self.root = root.resolve()
         self.files = frozenset(files)
@@ -108,9 +116,12 @@ class JavaScriptResolver:
         self.virtual_files = dict(virtual_files or {})
         self._warning_set = set(warnings)
         self._config_payload_cache: dict[str, Mapping[str, Any] | None] = {}
+        self._root_config_cache: dict[str, _ProjectConfig | None] = {}
         self._source_config_cache: dict[str, _ProjectConfig | None] = {}
         self._source_config_metadata_cache: dict[str, tuple[str, ...]] = {}
         self._source_metadata: dict[str, set[tuple[str, str]]] = {}
+        self._metadata_relationship_count = 0
+        self._max_metadata_relationships = max(0, max_metadata_relationships)
         self._source_manifest_cache: dict[str, tuple[str, ...]] = {}
         self._manifest_cache: dict[str, Mapping[str, Any] | None] = {}
         self._workspaces = self._build_workspace_index()
@@ -193,8 +204,6 @@ class JavaScriptResolver:
 
         if specifier.startswith("#"):
             return ()
-        if self._metadata_exists("package.json"):
-            self._record_metadata(source, "package.json", "package-manifest")
         return self._resolve_workspace(
             source,
             specifier,
@@ -227,12 +236,12 @@ class JavaScriptResolver:
                 historical_path = historical_candidates[0]
                 historical = (
                     historical_path,
-                    self._load_project_config(historical_path, ()),
+                    self._load_project_config(historical_path),
                 )
 
             if live_candidates:
                 candidate = live_candidates[0]
-                config = self._load_project_config(candidate, ())
+                config = self._load_project_config(candidate)
                 self._source_config_cache[key] = config
                 active_paths = list((candidate,) if config is None else config.metadata_paths)
                 paths: list[str] = []
@@ -263,11 +272,11 @@ class JavaScriptResolver:
 
         if historical is not None:
             candidate, config = historical
-            self._source_config_cache[key] = config
+            self._source_config_cache[key] = None
             paths = (candidate,) if config is None else config.metadata_paths
             self._source_config_metadata_cache[key] = tuple(dict.fromkeys(paths))
             self._record_config_metadata(source, key)
-            return config
+            return None
 
         self._source_config_cache[key] = None
         self._source_config_metadata_cache[key] = ()
@@ -276,7 +285,20 @@ class JavaScriptResolver:
     def _load_project_config(
         self,
         relative: str,
+    ) -> _ProjectConfig | None:
+        if relative in self._root_config_cache:
+            return self._root_config_cache[relative]
+
+        budget = _ConfigLoadBudget()
+        config = self._load_project_config_node(relative, (), budget)
+        self._root_config_cache[relative] = config
+        return config
+
+    def _load_project_config_node(
+        self,
+        relative: str,
         stack: tuple[str, ...],
+        budget: _ConfigLoadBudget,
     ) -> _ProjectConfig | None:
         if relative in stack:
             self._warn(f"JavaScript configuration extends cycle detected at {relative}")
@@ -284,6 +306,13 @@ class JavaScriptResolver:
         if len(stack) >= _MAX_CONFIG_DEPTH:
             self._warn(f"JavaScript configuration extends depth exceeded at {relative}")
             return _ProjectConfig()
+        if budget.loaded >= _MAX_CONFIG_LOADS:
+            self._warn(
+                "JavaScript configuration load budget exceeded; "
+                f"analysis was limited to {_MAX_CONFIG_LOADS} config nodes per root"
+            )
+            return _ProjectConfig(metadata_paths=(relative,))
+        budget.loaded += 1
 
         if relative not in self._config_payload_cache:
             self._config_payload_cache[relative] = self._read_json(
@@ -315,11 +344,22 @@ class JavaScriptResolver:
                 continue
             inherited = self._resolve_extends(relative, extend_value)
             if inherited is not None:
-                loaded = self._load_project_config(inherited, (*stack, relative))
-                if loaded is not None:
-                    parent = _merge_project_configs(parent, loaded)
-                else:
+                if budget.loaded >= _MAX_CONFIG_LOADS:
+                    self._warn(
+                        "JavaScript configuration load budget exceeded; "
+                        f"analysis was limited to {_MAX_CONFIG_LOADS} config nodes per root"
+                    )
                     parent = _with_project_metadata(parent, inherited)
+                else:
+                    loaded = self._load_project_config_node(
+                        inherited,
+                        (*stack, relative),
+                        budget,
+                    )
+                    if loaded is not None:
+                        parent = _merge_project_configs(parent, loaded)
+                    else:
+                        parent = _with_project_metadata(parent, inherited)
                 parent = _with_project_metadata_paths(
                     parent,
                     self._bounded_config_metadata(parent.metadata_paths, relative),
@@ -522,6 +562,7 @@ class JavaScriptResolver:
             return ()
         name = min(matches, key=lambda item: (-len(item), item))
         package = self._workspaces[name]
+        self._record_metadata(source, "package.json", "package-manifest")
         self._record_metadata(source, package.manifest_path, "package-manifest")
         suffix = specifier[len(name) :]
         if not _valid_workspace_request_suffix(suffix):
@@ -672,6 +713,11 @@ class JavaScriptResolver:
     def _build_workspace_index(self) -> dict[str, _WorkspacePackage]:
         if not self._metadata_exists("package.json"):
             return {}
+        if self._metadata_is_virtual_only("package.json"):
+            # Historical root metadata remains readable for warnings and impact provenance, but
+            # it must never define the current workspace topology.
+            self._read_manifest("package.json")
+            return {}
         root_manifest = self._read_manifest("package.json")
         if root_manifest is None:
             return {}
@@ -771,7 +817,6 @@ class JavaScriptResolver:
             return self._source_manifest_cache[key]
 
         historical: str | None = None
-        live: str | None = None
         current = parent
         while True:
             candidate = (current / "package.json").as_posix()
@@ -779,21 +824,35 @@ class JavaScriptResolver:
                 if self._metadata_is_virtual_only(candidate):
                     if historical is None:
                         historical = candidate
-                elif live is None:
-                    live = candidate
+                else:
+                    manifests = tuple(
+                        path for path in (historical, candidate) if path is not None
+                    )
+                    self._source_manifest_cache[key] = manifests
+                    return manifests
             if current == PurePosixPath("."):
                 break
             current = current.parent
 
-        # One current and one historical package boundary are sufficient: more distant manifests
-        # from either snapshot are shadowed by their nearer counterpart.
-        manifests = tuple(path for path in (historical, live) if path is not None)
+        manifests = (historical,) if historical is not None else ()
         self._source_manifest_cache[key] = manifests
         return manifests
 
     def _record_metadata(self, source: str, target: str, kind: str) -> None:
-        if target != source:
-            self._source_metadata.setdefault(source, set()).add((target, kind))
+        if target == source:
+            return
+        relationship = (target, kind)
+        relationships = self._source_metadata.get(source)
+        if relationships is not None and relationship in relationships:
+            return
+        if self._metadata_relationship_count >= self._max_metadata_relationships:
+            self._warn(
+                "Repository metadata relationship budget exceeded; "
+                f"analysis was limited to {self._max_metadata_relationships} relationships"
+            )
+            return
+        self._source_metadata.setdefault(source, set()).add(relationship)
+        self._metadata_relationship_count += 1
 
     def _candidate_manifest_paths(self) -> list[str]:
         candidates = {

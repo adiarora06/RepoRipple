@@ -3,6 +3,7 @@ from pathlib import Path
 
 from reporipple.analysis import analyze_impact
 from reporipple.config import MAX_SOURCE_FILE_BYTES
+from reporipple.javascript import JavaScriptResolver
 from reporipple.scanner import scan_repository
 
 
@@ -149,13 +150,32 @@ def test_package_manifest_change_impacts_owned_sources_and_workspace_importers(t
 
     graph = scan_repository(tmp_path)
 
-    assert [path for path, _, _ in impacted(
-        graph, tmp_path, "packages/shared/package.json"
-    )] == [
-        "apps/web/src/app.ts",
-        "packages/shared/src/index.ts",
-        "packages/shared/src/internal.ts",
+    assert impacted(graph, tmp_path, "packages/shared/package.json") == [
+        (
+            "apps/web/src/app.ts",
+            1,
+            ("packages/shared/package.json", "apps/web/src/app.ts"),
+        ),
+        (
+            "packages/shared/src/index.ts",
+            1,
+            ("packages/shared/package.json", "packages/shared/src/index.ts"),
+        ),
+        (
+            "packages/shared/src/internal.ts",
+            1,
+            ("packages/shared/package.json", "packages/shared/src/internal.ts"),
+        ),
     ]
+    assert {
+        edge.target
+        for edge in graph.metadata_edges
+        if edge.source == "apps/web/src/app.ts" and edge.kind == "package-manifest"
+    } == {
+        "apps/web/package.json",
+        "package.json",
+        "packages/shared/package.json",
+    }
 
 
 def test_root_manifest_change_reaches_nested_workspace_importers(tmp_path):
@@ -168,9 +188,13 @@ def test_root_manifest_change_reaches_nested_workspace_importers(tmp_path):
 
     graph = scan_repository(tmp_path)
 
-    assert [path for path, _, _ in impacted(graph, tmp_path, "package.json")] == [
-        "apps/web/app.ts"
+    assert impacted(graph, tmp_path, "package.json") == [
+        ("apps/web/app.ts", 1, ("package.json", "apps/web/app.ts"))
     ]
+    assert not any(
+        edge.source == "apps/web/no-imports.ts" and edge.target == "package.json"
+        for edge in graph.metadata_edges
+    )
 
 
 def test_package_governance_does_not_cross_nearest_manifest_boundary(tmp_path):
@@ -277,9 +301,23 @@ def test_virtual_deleted_workspace_manifest_reaches_owned_source_and_importer(tm
         },
     )
 
-    assert [path for path, _, _ in impacted(
-        graph, tmp_path, "packages/removed/package.json"
-    )] == ["packages/removed/src/index.ts", "src/app.ts"]
+    assert impacted(graph, tmp_path, "packages/removed/package.json") == [
+        (
+            "packages/removed/src/index.ts",
+            1,
+            ("packages/removed/package.json", "packages/removed/src/index.ts"),
+        ),
+        (
+            "src/app.ts",
+            1,
+            ("packages/removed/package.json", "src/app.ts"),
+        ),
+    ]
+    assert {
+        edge.source
+        for edge in graph.metadata_edges
+        if edge.target == "packages/removed/package.json"
+    } == {"packages/removed/src/index.ts", "src/app.ts"}
 
 
 def test_deleted_nested_manifest_does_not_shadow_live_ancestor_governance(tmp_path):
@@ -409,3 +447,195 @@ def test_live_and_historical_config_metadata_share_one_bounded_impact_set(tmp_pa
     assert len(config_edges) == 64
     assert {edge.target for edge in config_edges} >= {"jsconfig.json", "tsconfig.json"}
     assert any("dependency count exceeded" in warning for warning in graph.warnings)
+
+
+def test_diamond_extends_graph_has_a_hard_config_load_budget(tmp_path):
+    depth = 15
+    write_json(
+        tmp_path,
+        "tsconfig.json",
+        {"extends": ["./config/l01a.json", "./config/l01b.json"]},
+    )
+    for level in range(1, depth + 1):
+        payload = (
+            {}
+            if level == depth
+            else {
+                "extends": [
+                    f"./l{level + 1:02}a.json",
+                    f"./l{level + 1:02}b.json",
+                ]
+            }
+        )
+        write_json(tmp_path, f"config/l{level:02}a.json", payload)
+        write_json(tmp_path, f"config/l{level:02}b.json", payload)
+    write(tmp_path, "src/app.ts", "export {};\n")
+
+    graph = scan_repository(tmp_path)
+
+    config_edges = [
+        edge
+        for edge in graph.metadata_edges
+        if edge.source == "src/app.ts" and edge.kind == "js-config"
+    ]
+    assert {edge.target for edge in config_edges} >= {
+        "tsconfig.json",
+        "config/l01a.json",
+        "config/l01b.json",
+    }
+    assert len(config_edges) <= 31
+    assert sum("configuration load budget exceeded" in warning for warning in graph.warnings) == 1
+    assert not any("extends depth exceeded" in warning for warning in graph.warnings)
+
+
+def test_completed_root_config_load_is_reused_across_source_directories(
+    tmp_path,
+    monkeypatch,
+):
+    write_json(tmp_path, "tsconfig.json", {})
+    files = {"apps/one/app.ts", "apps/two/app.ts"}
+    warnings: list[str] = []
+    resolver = JavaScriptResolver(tmp_path, files, warnings)
+
+    resolver.index_metadata("apps/one/app.ts")
+
+    def unexpected_reload(*_args, **_kwargs):
+        raise AssertionError("completed root configuration was traversed twice")
+
+    monkeypatch.setattr(resolver, "_load_project_config_node", unexpected_reload)
+    resolver.index_metadata("apps/two/app.ts")
+
+    assert resolver.metadata_dependencies("apps/one/app.ts") == (("tsconfig.json", "js-config"),)
+    assert resolver.metadata_dependencies("apps/two/app.ts") == (("tsconfig.json", "js-config"),)
+
+
+def test_repository_metadata_relationship_budget_is_deterministic(tmp_path):
+    write_json(tmp_path, "tsconfig.json", {})
+    files = {f"src/file-{index}.ts" for index in range(4)}
+    warnings: list[str] = []
+    resolver = JavaScriptResolver(
+        tmp_path,
+        files,
+        warnings,
+        max_metadata_relationships=3,
+    )
+
+    for source in sorted(files):
+        resolver.index_metadata(source)
+    resolver.index_metadata("src/file-0.ts")
+
+    emitted = {source: resolver.metadata_dependencies(source) for source in sorted(files)}
+    assert emitted == {
+        "src/file-0.ts": (("tsconfig.json", "js-config"),),
+        "src/file-1.ts": (("tsconfig.json", "js-config"),),
+        "src/file-2.ts": (("tsconfig.json", "js-config"),),
+        "src/file-3.ts": (),
+    }
+    assert sum(len(relationships) for relationships in emitted.values()) == 3
+    assert warnings == [
+        "Repository metadata relationship budget exceeded; analysis was limited to 3 relationships"
+    ]
+
+
+def test_historical_only_config_cannot_override_live_workspace_resolution(tmp_path):
+    write_json(tmp_path, "package.json", {"workspaces": ["packages/*"]})
+    write_json(
+        tmp_path,
+        "packages/shared/package.json",
+        {"name": "shared", "source": "./src/index.ts"},
+    )
+    write(tmp_path, "packages/shared/src/index.ts", "export const source = 'workspace';\n")
+    write(tmp_path, "src/stale.ts", "export const source = 'stale';\n")
+    write(tmp_path, "src/app.ts", 'import { source } from "shared";\n')
+
+    graph = scan_repository(
+        tmp_path,
+        virtual_files={
+            "tsconfig.json": json.dumps(
+                {"compilerOptions": {"paths": {"shared": ["./src/stale.ts"]}}}
+            )
+        },
+    )
+
+    assert {edge.target for edge in graph.edges if edge.source == "src/app.ts"} == {
+        "packages/shared/src/index.ts"
+    }
+    assert {
+        (edge.target, edge.kind) for edge in graph.metadata_edges if edge.source == "src/app.ts"
+    } >= {
+        ("tsconfig.json", "js-config"),
+        ("package.json", "package-manifest"),
+        ("packages/shared/package.json", "package-manifest"),
+    }
+
+
+def test_virtual_only_root_manifest_cannot_define_current_workspaces(tmp_path):
+    write_json(
+        tmp_path,
+        "packages/shared/package.json",
+        {"name": "shared", "source": "./src/index.ts"},
+    )
+    write(tmp_path, "packages/shared/src/index.ts", "export {};\n")
+    write(tmp_path, "src/app.ts", 'import "shared";\n')
+
+    graph = scan_repository(
+        tmp_path,
+        virtual_files={
+            "package.json": json.dumps({"workspaces": ["packages/*"]}),
+        },
+    )
+
+    assert not any(edge.source == "src/app.ts" for edge in graph.edges)
+    assert {
+        edge.target
+        for edge in graph.metadata_edges
+        if edge.source == "src/app.ts" and edge.kind == "package-manifest"
+    } == {"package.json"}
+
+
+def test_live_child_manifest_stops_before_historical_root_boundary(tmp_path):
+    write_json(tmp_path, "packages/app/package.json", {"name": "app"})
+    write(tmp_path, "packages/app/src/app.ts", "export {};\n")
+
+    graph = scan_repository(
+        tmp_path,
+        virtual_files={"package.json": json.dumps({"name": "removed-root"})},
+    )
+
+    assert {
+        edge.target
+        for edge in graph.metadata_edges
+        if edge.source == "packages/app/src/app.ts" and edge.kind == "package-manifest"
+    } == {"packages/app/package.json"}
+
+
+def test_historical_manifest_is_retained_when_no_live_boundary_exists(tmp_path):
+    write(tmp_path, "packages/app/src/app.ts", "export {};\n")
+
+    graph = scan_repository(
+        tmp_path,
+        virtual_files={"package.json": json.dumps({"name": "removed-root"})},
+    )
+
+    assert {
+        edge.target
+        for edge in graph.metadata_edges
+        if edge.source == "packages/app/src/app.ts" and edge.kind == "package-manifest"
+    } == {"package.json"}
+
+
+def test_unmatched_external_import_does_not_depend_on_root_workspace_manifest(tmp_path):
+    write_json(tmp_path, "package.json", {"workspaces": ["packages/*"]})
+    write_json(tmp_path, "apps/web/package.json", {"name": "web"})
+    write_json(tmp_path, "packages/shared/package.json", {"name": "shared"})
+    write(tmp_path, "packages/shared/index.ts", "export {};\n")
+    write(tmp_path, "apps/web/app.ts", 'import "react";\n')
+
+    graph = scan_repository(tmp_path)
+
+    assert {
+        edge.target
+        for edge in graph.metadata_edges
+        if edge.source == "apps/web/app.ts" and edge.kind == "package-manifest"
+    } == {"apps/web/package.json"}
+    assert impacted(graph, tmp_path, "package.json") == []

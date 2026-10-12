@@ -134,9 +134,8 @@ def scan_repository(
             graph.metadata_edges.extend(_javascript_metadata_edges(relative, javascript))
 
     graph.edges = sorted(set(graph.edges), key=lambda edge: (edge.source, edge.target, edge.kind))
-    graph.metadata_edges = sorted(
-        set(graph.metadata_edges), key=lambda edge: (edge.source, edge.target, edge.kind)
-    )
+    # The resolver stores a set per source and each source is emitted once, so this list is unique.
+    graph.metadata_edges.sort(key=lambda edge: (edge.source, edge.target, edge.kind))
     return graph
 
 
