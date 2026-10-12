@@ -232,6 +232,37 @@ def test_renamed_project_config_keeps_old_and_new_paths_actionable(tmp_path):
     )
 
 
+def test_deleted_nested_config_does_not_shadow_live_ancestor_resolution(tmp_path):
+    write_json(
+        tmp_path,
+        "tsconfig.json",
+        {"compilerOptions": {"paths": {"@root": ["./shared/value.ts"]}}},
+    )
+    write(tmp_path, "shared/value.ts", "export {};\n")
+    write(tmp_path, "packages/app/src/app.ts", 'import "@root";\n')
+
+    graph = scan_repository(
+        tmp_path,
+        virtual_files={
+            "packages/app/tsconfig.json": json.dumps(
+                {"compilerOptions": {"paths": {"@old": ["./src/old.ts"]}}}
+            )
+        },
+    )
+
+    assert any(
+        edge.source == "packages/app/src/app.ts" and edge.target == "shared/value.ts"
+        for edge in graph.edges
+    )
+    assert impacted(graph, tmp_path, "packages/app/tsconfig.json") == [
+        (
+            "packages/app/src/app.ts",
+            1,
+            ("packages/app/tsconfig.json", "packages/app/src/app.ts"),
+        )
+    ]
+
+
 def test_virtual_deleted_workspace_manifest_reaches_owned_source_and_importer(tmp_path):
     write_json(tmp_path, "package.json", {"workspaces": ["packages/*"]})
     write(tmp_path, "src/app.ts", 'import "removed";\n')

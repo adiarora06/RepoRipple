@@ -208,6 +208,7 @@ class JavaScriptResolver:
             self._record_config_metadata(source, key)
             return self._source_config_cache[key]
 
+        historical: tuple[str, _ProjectConfig | None] | None = None
         current = parent
         while True:
             candidates = [
@@ -215,35 +216,33 @@ class JavaScriptResolver:
                 for name in _CONFIG_NAMES
                 if self._metadata_exists((current / name).as_posix())
             ]
-            if candidates:
-                candidate = next(
-                    (
-                        path
-                        for path in candidates
-                        if not self._metadata_is_virtual_only(path)
-                    ),
-                    candidates[0],
+            live_candidates = [
+                path for path in candidates if not self._metadata_is_virtual_only(path)
+            ]
+            historical_candidates = [
+                path for path in candidates if self._metadata_is_virtual_only(path)
+            ]
+            if historical is None and historical_candidates:
+                historical_path = historical_candidates[0]
+                historical = (
+                    historical_path,
+                    self._load_project_config(historical_path, ()),
                 )
+
+            if live_candidates:
+                candidate = live_candidates[0]
                 config = self._load_project_config(candidate, ())
                 self._source_config_cache[key] = config
                 paths = list((candidate,) if config is None else config.metadata_paths)
 
-                # A Git rename can leave the old config as a virtual historical file beside the
-                # live replacement. Resolution keeps normal tsconfig/jsconfig precedence, while
-                # impact metadata retains both snapshots so either changed path remains useful.
-                for alternate in candidates:
-                    if alternate == candidate:
-                        continue
-                    if not (
-                        self._metadata_is_virtual_only(candidate)
-                        or self._metadata_is_virtual_only(alternate)
-                    ):
-                        continue
-                    alternate_config = self._load_project_config(alternate, ())
+                # Deleted or renamed configs remain historical impact targets, but they must not
+                # shadow the live config that controls current import resolution.
+                if historical is not None:
+                    historical_path, historical_config = historical
                     paths.extend(
-                        (alternate,)
-                        if alternate_config is None
-                        else alternate_config.metadata_paths
+                        (historical_path,)
+                        if historical_config is None
+                        else historical_config.metadata_paths
                     )
 
                 self._source_config_metadata_cache[key] = tuple(dict.fromkeys(paths))
@@ -252,6 +251,14 @@ class JavaScriptResolver:
             if current == PurePosixPath("."):
                 break
             current = current.parent
+
+        if historical is not None:
+            candidate, config = historical
+            self._source_config_cache[key] = config
+            paths = (candidate,) if config is None else config.metadata_paths
+            self._source_config_metadata_cache[key] = tuple(dict.fromkeys(paths))
+            self._record_config_metadata(source, key)
+            return config
 
         self._source_config_cache[key] = None
         self._source_config_metadata_cache[key] = ()
