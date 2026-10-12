@@ -234,19 +234,27 @@ class JavaScriptResolver:
                 candidate = live_candidates[0]
                 config = self._load_project_config(candidate, ())
                 self._source_config_cache[key] = config
-                paths = list((candidate,) if config is None else config.metadata_paths)
+                active_paths = list((candidate,) if config is None else config.metadata_paths)
+                paths: list[str] = []
+                required_paths = [candidate]
 
                 # Deleted or renamed configs remain historical impact targets, but they must not
                 # shadow the live config that controls current import resolution.
                 if historical is not None:
                     historical_path, historical_config = historical
+                    required_paths.append(historical_path)
                     paths.extend(
                         (historical_path,)
                         if historical_config is None
                         else historical_config.metadata_paths
                     )
+                paths.extend(active_paths)
 
-                self._source_config_metadata_cache[key] = tuple(dict.fromkeys(paths))
+                self._source_config_metadata_cache[key] = self._bounded_config_metadata(
+                    paths,
+                    candidate,
+                    required=required_paths,
+                )
                 self._record_config_metadata(source, key)
                 return config
             if current == PurePosixPath("."):
@@ -373,6 +381,8 @@ class JavaScriptResolver:
         self,
         paths: Iterable[str],
         owner: str,
+        *,
+        required: Iterable[str] = (),
     ) -> tuple[str, ...]:
         unique = tuple(dict.fromkeys(paths))
         if len(unique) <= _MAX_CONFIG_METADATA_PATHS:
@@ -381,8 +391,18 @@ class JavaScriptResolver:
             f"JavaScript configuration dependency count exceeded at {owner}; "
             f"metadata impact was limited to {_MAX_CONFIG_METADATA_PATHS} files"
         )
-        # Keep the nearest dependencies and the owning config, which are appended last.
-        return unique[-_MAX_CONFIG_METADATA_PATHS:]
+        required_paths = tuple(path for path in dict.fromkeys(required) if path in unique)
+        required_set = set(required_paths)
+        available = _MAX_CONFIG_METADATA_PATHS - len(required_paths)
+        retained_optional = {path for path in unique if path not in required_set}
+        if len(retained_optional) > available:
+            optional = [path for path in unique if path not in required_set]
+            retained_optional = set(optional[-available:]) if available else set()
+        return tuple(
+            path
+            for path in unique
+            if path in required_set or path in retained_optional
+        )
 
     def _resolve_extends(self, owner: str, value: str) -> str | None:
         owner_directory = self.root / PurePosixPath(owner).parent

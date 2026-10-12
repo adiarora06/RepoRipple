@@ -343,3 +343,39 @@ def test_wide_extends_graph_has_a_bounded_metadata_impact_set(tmp_path):
     ]
     assert len(config_edges) == 64
     assert any("dependency count exceeded" in warning for warning in graph.warnings)
+
+
+def test_live_and_historical_config_metadata_share_one_bounded_impact_set(tmp_path):
+    parent_count = 70
+    for prefix in ("current", "historical"):
+        for index in range(parent_count):
+            write_json(tmp_path, f"config/{prefix}-{index:03}.json", {})
+    write_json(
+        tmp_path,
+        "jsconfig.json",
+        {
+            "extends": [
+                f"./config/current-{index:03}.json" for index in range(parent_count)
+            ]
+        },
+    )
+    write(tmp_path, "src/app.js", "export {};\n")
+    historical = json.dumps(
+        {
+            "extends": [
+                f"./config/historical-{index:03}.json"
+                for index in range(parent_count)
+            ]
+        }
+    )
+
+    graph = scan_repository(tmp_path, virtual_files={"tsconfig.json": historical})
+
+    config_edges = [
+        edge
+        for edge in graph.metadata_edges
+        if edge.source == "src/app.js" and edge.kind == "js-config"
+    ]
+    assert len(config_edges) == 64
+    assert {edge.target for edge in config_edges} >= {"jsconfig.json", "tsconfig.json"}
+    assert any("dependency count exceeded" in warning for warning in graph.warnings)
