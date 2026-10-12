@@ -216,7 +216,14 @@ class JavaScriptResolver:
                 if self._metadata_exists((current / name).as_posix())
             ]
             if candidates:
-                candidate = candidates[0]
+                candidate = next(
+                    (
+                        path
+                        for path in candidates
+                        if not self._metadata_is_virtual_only(path)
+                    ),
+                    candidates[0],
+                )
                 config = self._load_project_config(candidate, ())
                 self._source_config_cache[key] = config
                 paths = list((candidate,) if config is None else config.metadata_paths)
@@ -224,7 +231,9 @@ class JavaScriptResolver:
                 # A Git rename can leave the old config as a virtual historical file beside the
                 # live replacement. Resolution keeps normal tsconfig/jsconfig precedence, while
                 # impact metadata retains both snapshots so either changed path remains useful.
-                for alternate in candidates[1:]:
+                for alternate in candidates:
+                    if alternate == candidate:
+                        continue
                     if not (
                         self._metadata_is_virtual_only(candidate)
                         or self._metadata_is_virtual_only(alternate)

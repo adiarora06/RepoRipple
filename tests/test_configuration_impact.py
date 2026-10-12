@@ -201,17 +201,35 @@ def test_virtual_deleted_project_config_remains_traceable(tmp_path):
 
 
 def test_renamed_project_config_keeps_old_and_new_paths_actionable(tmp_path):
-    write_json(tmp_path, "jsconfig.json", {})
-    write(tmp_path, "src/app.js", "export {};\n")
+    write_json(
+        tmp_path,
+        "jsconfig.json",
+        {"compilerOptions": {"paths": {"@new": ["./src/new.js"]}}},
+    )
+    write(tmp_path, "src/app.js", 'import "@new";\n')
+    write(tmp_path, "src/new.js", "export {};\n")
 
-    graph = scan_repository(tmp_path, virtual_files={"tsconfig.json": "{}"})
+    graph = scan_repository(
+        tmp_path,
+        virtual_files={
+            "tsconfig.json": json.dumps(
+                {"compilerOptions": {"paths": {"@old": ["./src/old.ts"]}}}
+            )
+        },
+    )
 
     assert impacted(graph, tmp_path, "tsconfig.json") == [
-        ("src/app.js", 1, ("tsconfig.json", "src/app.js"))
+        ("src/app.js", 1, ("tsconfig.json", "src/app.js")),
+        ("src/new.js", 1, ("tsconfig.json", "src/new.js")),
     ]
     assert impacted(graph, tmp_path, "jsconfig.json") == [
-        ("src/app.js", 1, ("jsconfig.json", "src/app.js"))
+        ("src/app.js", 1, ("jsconfig.json", "src/app.js")),
+        ("src/new.js", 1, ("jsconfig.json", "src/new.js")),
     ]
+    assert any(
+        edge.source == "src/app.js" and edge.target == "src/new.js"
+        for edge in graph.edges
+    )
 
 
 def test_virtual_deleted_workspace_manifest_reaches_owned_source_and_importer(tmp_path):
