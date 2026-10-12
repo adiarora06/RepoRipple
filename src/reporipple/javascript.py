@@ -70,12 +70,14 @@ class _ProjectConfig:
     path_rules: tuple[_PathRule, ...] = ()
     defines_base_url: bool = False
     defines_path_rules: bool = False
+    metadata_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class _WorkspacePackage:
     name: str
     directory: Path
+    manifest_path: str
     manifest: Mapping[str, Any]
     historical: bool = False
 
@@ -106,14 +108,15 @@ class JavaScriptResolver:
         self._warning_set = set(warnings)
         self._config_cache: dict[str, _ProjectConfig | None] = {}
         self._source_config_cache: dict[str, _ProjectConfig | None] = {}
+        self._source_config_metadata_cache: dict[str, tuple[str, ...]] = {}
+        self._source_metadata: dict[str, set[tuple[str, str]]] = {}
+        self._source_manifest_cache: dict[str, str | None] = {}
         self._manifest_cache: dict[str, Mapping[str, Any] | None] = {}
         self._workspaces = self._build_workspace_index()
 
     def imports(self, source: str, content: str) -> list[tuple[str, str]]:
         """Return resolved ``(specifier, target)`` pairs for one source file."""
-        # Load the nearest config even when this file only uses relative imports so malformed or
-        # cyclic project configuration remains visible in scanner warnings.
-        self._nearest_config(source)
+        self.index_metadata(source)
         resolved: list[tuple[str, str]] = []
         source_suffix = PurePosixPath(source).suffix.lower()
         for match in JS_IMPORT_PATTERN.finditer(content):
@@ -131,6 +134,17 @@ class JavaScriptResolver:
                 if target != source:
                     resolved.append((specifier, target))
         return resolved
+
+    def index_metadata(self, source: str) -> None:
+        """Record local metadata that governs a source, without reading the source itself."""
+        # Load the nearest config even when this file only uses relative imports so malformed or
+        # cyclic project configuration remains visible in scanner warnings.
+        self._nearest_config(source)
+        self._record_package_governance(source)
+
+    def metadata_dependencies(self, source: str) -> tuple[tuple[str, str], ...]:
+        """Return metadata paths that can change how ``source`` is interpreted or resolved."""
+        return tuple(sorted(self._source_metadata.get(source, set())))
 
     def resolve(
         self,
@@ -178,7 +192,10 @@ class JavaScriptResolver:
 
         if specifier.startswith("#"):
             return ()
+        if self._metadata_exists("package.json"):
+            self._record_metadata(source, "package.json", "package-manifest")
         return self._resolve_workspace(
+            source,
             specifier,
             conditions,
             prefer_typescript=prefer_typescript,
@@ -188,21 +205,47 @@ class JavaScriptResolver:
         parent = PurePosixPath(source).parent
         key = parent.as_posix()
         if key in self._source_config_cache:
+            self._record_config_metadata(source, key)
             return self._source_config_cache[key]
 
         current = parent
         while True:
-            for name in _CONFIG_NAMES:
-                candidate = (current / name).as_posix()
-                if self._metadata_exists(candidate):
-                    config = self._load_project_config(candidate, ())
-                    self._source_config_cache[key] = config
-                    return config
+            candidates = [
+                (current / name).as_posix()
+                for name in _CONFIG_NAMES
+                if self._metadata_exists((current / name).as_posix())
+            ]
+            if candidates:
+                candidate = candidates[0]
+                config = self._load_project_config(candidate, ())
+                self._source_config_cache[key] = config
+                paths = list((candidate,) if config is None else config.metadata_paths)
+
+                # A Git rename can leave the old config as a virtual historical file beside the
+                # live replacement. Resolution keeps normal tsconfig/jsconfig precedence, while
+                # impact metadata retains both snapshots so either changed path remains useful.
+                for alternate in candidates[1:]:
+                    if not (
+                        self._metadata_is_virtual_only(candidate)
+                        or self._metadata_is_virtual_only(alternate)
+                    ):
+                        continue
+                    alternate_config = self._load_project_config(alternate, ())
+                    paths.extend(
+                        (alternate,)
+                        if alternate_config is None
+                        else alternate_config.metadata_paths
+                    )
+
+                self._source_config_metadata_cache[key] = tuple(dict.fromkeys(paths))
+                self._record_config_metadata(source, key)
+                return config
             if current == PurePosixPath("."):
                 break
             current = current.parent
 
         self._source_config_cache[key] = None
+        self._source_config_metadata_cache[key] = ()
         return None
 
     def _load_project_config(
@@ -214,10 +257,10 @@ class JavaScriptResolver:
             return self._config_cache[relative]
         if relative in stack:
             self._warn(f"JavaScript configuration extends cycle detected at {relative}")
-            return _ProjectConfig()
+            return _ProjectConfig(metadata_paths=(relative,))
         if len(stack) >= _MAX_CONFIG_DEPTH:
             self._warn(f"JavaScript configuration extends depth exceeded at {relative}")
-            return _ProjectConfig()
+            return _ProjectConfig(metadata_paths=(relative,))
 
         payload = self._read_json(relative, jsonc=True, label="JavaScript configuration")
         if payload is None:
@@ -247,6 +290,8 @@ class JavaScriptResolver:
                 loaded = self._load_project_config(inherited, (*stack, relative))
                 if loaded is not None:
                     parent = _merge_project_configs(parent, loaded)
+                else:
+                    parent = _with_project_metadata(parent, inherited)
 
         compiler = payload.get("compilerOptions", {})
         if not isinstance(compiler, dict):
@@ -293,6 +338,7 @@ class JavaScriptResolver:
             path_rules=path_rules,
             defines_base_url=defines_base_url,
             defines_path_rules=defines_path_rules,
+            metadata_paths=tuple(dict.fromkeys((*parent.metadata_paths, relative))),
         )
         self._config_cache[relative] = config
         return config
@@ -400,6 +446,7 @@ class JavaScriptResolver:
 
     def _resolve_workspace(
         self,
+        source: str,
         specifier: str,
         conditions: frozenset[str],
         *,
@@ -414,6 +461,7 @@ class JavaScriptResolver:
             return ()
         name = min(matches, key=lambda item: (-len(item), item))
         package = self._workspaces[name]
+        self._record_metadata(source, package.manifest_path, "package-manifest")
         suffix = specifier[len(name) :]
         if not _valid_workspace_request_suffix(suffix):
             return ()
@@ -583,7 +631,9 @@ class JavaScriptResolver:
             and isinstance(root_name, str)
             and root_name
         ):
-            candidates.append(_WorkspacePackage(root_name, self.root, root_manifest))
+            candidates.append(
+                _WorkspacePackage(root_name, self.root, "package.json", root_manifest)
+            )
 
         if patterns:
             for manifest_path in self._candidate_manifest_paths():
@@ -616,6 +666,7 @@ class JavaScriptResolver:
                     _WorkspacePackage(
                         name,
                         directory,
+                        manifest_path,
                         manifest,
                         historical=historical,
                     )
@@ -643,6 +694,38 @@ class JavaScriptResolver:
                 continue
             index[name] = packages[0]
         return index
+
+    def _record_config_metadata(self, source: str, directory_key: str) -> None:
+        for path in self._source_config_metadata_cache.get(directory_key, ()):
+            self._record_metadata(source, path, "js-config")
+
+    def _record_package_governance(self, source: str) -> None:
+        manifest = self._nearest_package_manifest(source)
+        if manifest is not None:
+            self._record_metadata(source, manifest, "package-manifest")
+
+    def _nearest_package_manifest(self, source: str) -> str | None:
+        parent = PurePosixPath(source).parent
+        key = parent.as_posix()
+        if key in self._source_manifest_cache:
+            return self._source_manifest_cache[key]
+
+        current = parent
+        while True:
+            candidate = (current / "package.json").as_posix()
+            if self._metadata_exists(candidate):
+                self._source_manifest_cache[key] = candidate
+                return candidate
+            if current == PurePosixPath("."):
+                break
+            current = current.parent
+
+        self._source_manifest_cache[key] = None
+        return None
+
+    def _record_metadata(self, source: str, target: str, kind: str) -> None:
+        if target != source:
+            self._source_metadata.setdefault(source, set()).add((target, kind))
 
     def _candidate_manifest_paths(self) -> list[str]:
         candidates = {
@@ -733,6 +816,11 @@ class JavaScriptResolver:
             return True
         path = self.root / PurePosixPath(relative)
         return path.is_file() or path.is_symlink()
+
+    def _metadata_is_virtual_only(self, relative: str) -> bool:
+        return relative in self.virtual_files and not (
+            self.root / PurePosixPath(relative)
+        ).is_file()
 
     def _resolve_from(
         self,
@@ -857,6 +945,17 @@ def _merge_project_configs(
         path_rules=overlay.path_rules if overlay.defines_path_rules else base.path_rules,
         defines_base_url=base.defines_base_url or overlay.defines_base_url,
         defines_path_rules=base.defines_path_rules or overlay.defines_path_rules,
+        metadata_paths=tuple(dict.fromkeys((*base.metadata_paths, *overlay.metadata_paths))),
+    )
+
+
+def _with_project_metadata(config: _ProjectConfig, relative: str) -> _ProjectConfig:
+    return _ProjectConfig(
+        base_url=config.base_url,
+        path_rules=config.path_rules,
+        defines_base_url=config.defines_base_url,
+        defines_path_rules=config.defines_path_rules,
+        metadata_paths=tuple(dict.fromkeys((*config.metadata_paths, relative))),
     )
 
 
