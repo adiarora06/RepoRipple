@@ -85,7 +85,7 @@ jobs:
   impact:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -93,7 +93,7 @@ jobs:
         uses: adiarora06/RepoRipple@6253b03f91e46c2f38fb2e05958dbc174d6a08d7 # v0.4.0
         with:
           base: ${{ github.event.pull_request.base.sha }}
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reporipple-impact
           path: |
