@@ -2,7 +2,7 @@
 
 All notable changes to RepoRipple are documented here.
 
-## Unreleased
+## 0.5.0 - 2026-10-29
 
 ### Added
 
@@ -12,7 +12,7 @@ All notable changes to RepoRipple are documented here.
 
 ### Changed
 
-- GitHub Actions are pinned to their current releases, release jobs no longer cache mutable Python
+- GitHub Actions are pinned to immutable commit SHAs, release jobs no longer cache mutable Python
   packages, and concurrent runs for the same release tag are serialized.
 - Dependabot now groups GitHub Actions updates and waits seven days before proposing routine version
   updates, reducing automated pull-request noise without delaying security updates.
