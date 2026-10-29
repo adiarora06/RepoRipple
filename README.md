@@ -88,7 +88,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: reporipple
-        uses: adiarora06/RepoRipple@v0.5.0
+        uses: adiarora06/RepoRipple@6047308ffacd162a9fb904e18aa2f0bf8728c567 # v0.5.0 release source
         with:
           base: ${{ github.event.pull_request.base.sha }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -100,9 +100,9 @@ jobs:
 ```
 
 The Action accepts `path`, `base`, `max-depth`, `fail-on`, and `reports-directory`. It outputs
-`markdown-report`, `json-report`, and `risk-level`. For production, resolve the `v0.5.0` tag to its
-release commit and pin that immutable SHA. Use `fetch-depth: 0` so the requested base revision is
-available.
+`markdown-report`, `json-report`, and `risk-level`. The example is pinned to RepoRipple's immutable
+v0.5.0 source commit; when upgrading, replace it with the commit SHA for the desired release. Use
+`fetch-depth: 0` so the requested base revision is available.
 
 This repository's own [pull-request workflow](https://github.com/adiarora06/RepoRipple/blob/v0.5.0/.github/workflows/reporipple.yml) demonstrates a
 fork-safe commenting design. Analysis runs with read-only contents access. A separate job updates
