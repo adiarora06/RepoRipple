@@ -42,11 +42,12 @@ outputs:
 runs:
   using: composite
   steps:
+    # Do not enable setup-python's pip cache here: composite-action consumers
+    # can be JavaScript-only repositories without a Python dependency manifest.
     - name: Set up Python
       uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
       with:
         python-version: "3.12"
-        cache: pip
 
     - name: Install RepoRipple
       shell: bash

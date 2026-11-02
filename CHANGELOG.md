@@ -2,6 +2,13 @@
 
 All notable changes to RepoRipple are documented here.
 
+## Unreleased
+
+### Fixed
+
+- The public GitHub Action no longer requires consumer repositories to contain a Python dependency
+  manifest, so JavaScript-only projects can generate impact reports without compatibility files.
+
 ## 0.5.0 - 2026-10-29
 
 ### Added
