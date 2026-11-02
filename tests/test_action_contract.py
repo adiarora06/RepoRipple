@@ -20,6 +20,17 @@ def test_public_action_emits_both_report_formats_and_summary():
     assert 'cat "$markdown_report" >> "$GITHUB_STEP_SUMMARY"' in document
 
 
+def test_public_action_does_not_require_consumer_python_manifests():
+    document = ACTION.read_text(encoding="utf-8")
+    setup_python = document.split("    - name: Set up Python\n", maxsplit=1)[1].split(
+        "    - name: Install RepoRipple\n", maxsplit=1
+    )[0]
+
+    assert "cache:" not in setup_python
+    assert "requirements.txt" not in document
+    assert "pyproject.toml" not in document
+
+
 def test_official_actions_are_pinned_to_immutable_commits():
     documents = [
         ACTION.read_text(encoding="utf-8"),
