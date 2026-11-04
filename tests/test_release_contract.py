@@ -32,5 +32,8 @@ def test_release_actions_are_immutably_pinned_and_publish_with_oidc():
     assert references
     assert all(PINNED_ACTION.search(reference) for reference in references)
     assert "id-token: write" in workflow
+    assert "attestations: write" in workflow
+    assert "actions/attest-build-provenance@" in workflow
+    assert "publish-python:\n    name: Publish to PyPI\n    needs: attest" in workflow
     assert "environment:\n      name: pypi" in workflow
     assert "login github-oidc" in workflow
