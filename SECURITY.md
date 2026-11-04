@@ -16,7 +16,9 @@ Include, when available:
 - relevant platform and Python-version details; and
 - any known mitigation, with secrets and private repository content removed.
 
-Security fixes are developed on `main` and included in subsequent releases. RepoRipple does not
+Confirmed fixes are coordinated through the private advisory and its temporary private fork when
+appropriate. Fix details stay private until the patch, public release, and release guidance can be
+published together. After disclosure, the maintained fix lives on `main`; RepoRipple does not
 currently publish separately maintained release branches, so users should update to the latest
 release when a fix is published.
 
