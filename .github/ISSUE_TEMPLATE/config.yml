@@ -1,0 +1,6 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/adiarora06/RepoRipple/security/advisories/new
+    about: Use private vulnerability reporting; do not post exploit details publicly.
+

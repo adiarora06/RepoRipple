@@ -304,6 +304,9 @@ uv pip install --python .venv/bin/python -e ".[dev]"
 uv build
 ```
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for RepoRipple's design contracts, test map, and pull-request
+expectations.
+
 ## Privacy and security
 
 RepoRipple's deterministic analysis runs locally and does not transmit repository contents. It
@@ -312,6 +315,10 @@ source files outside common generated and dependency directories. The MCP server
 repository request to its configured `--root` and exposes read-only tools only. Network access
 occurs only when `--explain` is present; `--explain-preview` remains fully local so the outbound
 body can be audited first.
+
+Report suspected vulnerabilities through
+[GitHub private vulnerability reporting](https://github.com/adiarora06/RepoRipple/security/advisories/new);
+see [SECURITY.md](SECURITY.md) for scope and reporting guidance.
 
 ## License
 
