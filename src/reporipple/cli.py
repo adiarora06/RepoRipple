@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
+import shutil
 import sys
+import tempfile
+import uuid
 import webbrowser
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from typing import BinaryIO
 
 from reporipple import __version__
 from reporipple.analysis import analyze_impact
@@ -21,6 +29,7 @@ from reporipple.explain import (
 )
 from reporipple.git import GitError, discover_changes
 from reporipple.impact_map import render_impact_map
+from reporipple.models import ImpactReport
 from reporipple.report import render_json, render_markdown
 from reporipple.scanner import scan_repository
 
@@ -63,7 +72,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("medium", "high"),
         help="Exit with status 2 when the report reaches this risk level",
     )
-    parser.add_argument("--output", type=Path, help="Write the report to a file instead of stdout")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Write one report to FILE, or the all-format bundle to DIRECTORY",
+    )
     parser.add_argument(
         "--open",
         action="store_true",
@@ -222,18 +235,19 @@ def main(argv: list[str] | None = None) -> int:
                 )
     if args.output:
         if args.format == "all":
-            args.output.mkdir(parents=True, exist_ok=True)
-            (args.output / "impact.md").write_text(render_markdown(report), encoding="utf-8")
-            (args.output / "impact.json").write_text(render_json(report), encoding="utf-8")
+            try:
+                _write_report_bundle(args.output, report)
+            except OSError as exc:
+                print(f"error: could not write report bundle: {exc}", file=sys.stderr)
+                return 1
             html_output = args.output / "impact.html"
-            html_output.write_text(render_impact_map(report), encoding="utf-8")
         else:
             args.output.write_text(rendered, encoding="utf-8")
             html_output = args.output
         if args.open_report:
             try:
                 opened = webbrowser.open(html_output.resolve().as_uri())
-            except webbrowser.Error as exc:
+            except (OSError, webbrowser.Error) as exc:
                 print(f"warning: could not open HTML report: {exc}", file=sys.stderr)
             else:
                 if not opened:
@@ -247,6 +261,105 @@ def main(argv: list[str] | None = None) -> int:
     if args.fail_on and RISK_ORDER[report.risk_level] >= RISK_ORDER[args.fail_on]:
         return 2
     return 0
+
+
+_BUNDLE_FILES = ("impact.md", "impact.json", "impact.html")
+
+
+def _write_report_bundle(directory: Path, report: ImpactReport) -> None:
+    """Publish a complete report bundle without exposing partially written files."""
+    reports = {
+        "impact.md": render_markdown(report),
+        "impact.json": render_json(report),
+        "impact.html": render_impact_map(report),
+    }
+    directory = directory.expanduser().absolute()
+    parent = directory.parent
+    parent.mkdir(parents=True, exist_ok=True)
+
+    with _bundle_lock(directory):
+        _validate_bundle_destination(directory)
+        staging = Path(tempfile.mkdtemp(prefix=f".{directory.name}-staging-", dir=parent))
+        backup: Path | None = None
+        try:
+            for name in _BUNDLE_FILES:
+                (staging / name).write_text(reports[name], encoding="utf-8")
+
+            if directory.exists():
+                backup = parent / f".{directory.name}-backup-{uuid.uuid4().hex}"
+                os.replace(directory, backup)
+            try:
+                os.replace(staging, directory)
+            except OSError:
+                if backup is not None:
+                    os.replace(backup, directory)
+                    backup = None
+                raise
+            if backup is not None:
+                shutil.rmtree(backup, ignore_errors=True)
+        finally:
+            if staging.exists():
+                shutil.rmtree(staging, ignore_errors=True)
+
+
+def _validate_bundle_destination(directory: Path) -> None:
+    if not directory.exists():
+        return
+    if directory.is_symlink() or not directory.is_dir():
+        raise OSError(f"bundle destination is not a regular directory: {directory}")
+    unexpected = sorted(path.name for path in directory.iterdir() if path.name not in _BUNDLE_FILES)
+    if unexpected:
+        listed = ", ".join(unexpected[:3])
+        suffix = f" (+{len(unexpected) - 3} more)" if len(unexpected) > 3 else ""
+        raise OSError(f"bundle destination contains unrelated files: {listed}{suffix}")
+
+
+@contextmanager
+def _bundle_lock(directory: Path) -> Iterator[None]:
+    lock_root = Path(tempfile.gettempdir()) / "reporipple-locks"
+    lock_root.mkdir(mode=0o700, exist_ok=True)
+    canonical = directory.parent.resolve(strict=False) / directory.name
+    identity = hashlib.sha256(str(canonical).encode("utf-8")).hexdigest()
+    handle = (lock_root / f"{identity}.lock").open("a+b")
+    locked = False
+    try:
+        _lock_file(handle)
+        locked = True
+        yield
+    finally:
+        if locked:
+            _unlock_file(handle)
+        handle.close()
+
+
+def _lock_file(handle: BinaryIO) -> None:
+    if os.name == "nt":  # pragma: no cover - exercised by Windows consumers
+        import msvcrt
+
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"\0")
+            handle.flush()
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        return
+
+    import fcntl
+
+    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+
+
+def _unlock_file(handle: BinaryIO) -> None:
+    if os.name == "nt":  # pragma: no cover - exercised by Windows consumers
+        import msvcrt
+
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        return
+
+    import fcntl
+
+    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _run_mcp(argv: list[str]) -> int:

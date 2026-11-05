@@ -12,4 +12,5 @@ From the RepoRipple source checkout, run:
 
 The script writes Markdown, JSON, and self-contained HTML reports to the operating system's
 temporary directory and opens the visual map in the default browser. Set `CI=true` to generate the
-bundle without opening a browser.
+bundle without opening a browser. The script runs RepoRipple from local source with Python and does
+not resolve or download packages.

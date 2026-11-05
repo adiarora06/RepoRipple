@@ -35,6 +35,9 @@ reporipple . --base origin/main --format all --output reporipple-reports --open
 ```
 
 The output directory contains `impact.md`, `impact.json`, and `impact.html`.
+RepoRipple renders all three first, stages them outside the destination, serializes concurrent
+writers, and then replaces the previous bundle as a unit. It refuses to replace a directory that
+contains unrelated files.
 
 ## What the map shows
 
@@ -85,4 +88,5 @@ From a RepoRipple source checkout:
 
 The demo analyzes a small checkout service under `examples/checkout-demo`, writes the three-report
 bundle to the operating system's temporary directory, and opens its map. Set `CI=true` to skip
-opening the browser.
+opening the browser. The script runs the local source directly with Python and does not resolve or
+download packages.

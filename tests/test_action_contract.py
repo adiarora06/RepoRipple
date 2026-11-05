@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 ACTION = ROOT / "action.yml"
 WORKFLOW = ROOT / ".github" / "workflows" / "reporipple.yml"
+DEMO = ROOT / "scripts" / "demo-impact-map.sh"
 PINNED_ACTION = re.compile(r"uses:\s+actions/[\w-]+@([0-9a-f]{40})(?:\s|$)")
 
 
@@ -67,3 +68,12 @@ def test_pr_workflow_uploads_the_visual_impact_map():
 
     assert "${{ steps.reporipple.outputs.html-report }}" in document
     assert "Workflow run and complete report bundle" in document
+
+
+def test_demo_runs_local_source_without_resolving_packages():
+    document = DEMO.read_text(encoding="utf-8")
+
+    assert "uv run" not in document
+    assert "pip install" not in document
+    assert 'PYTHONPATH="$source_path"' in document
+    assert "-m reporipple.cli" in document

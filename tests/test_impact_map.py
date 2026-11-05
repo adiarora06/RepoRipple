@@ -96,3 +96,31 @@ def test_html_map_caps_visual_nodes_but_keeps_complete_review_list():
     assert f"Map limited to {MAX_MAP_NODES} nodes" in output
     assert "src/consumer_084.py" in output
     assert output.count('class="node node-') == MAX_MAP_NODES
+
+
+def test_html_map_includes_suggested_test_without_a_dependency_edge():
+    report = sample_report()
+    report.impacted_files = report.impacted_files[:1]
+    report.suggested_tests = ["tests/test_store.py"]
+
+    output = render_impact_map(report)
+
+    assert "tests/test_store.py" in output
+    assert "SUGGESTED TEST" in output
+    assert output.count('class="node node-test"') == 1
+
+
+def test_html_map_reserves_space_for_dependents_and_tests_after_a_wide_change():
+    report = sample_report()
+    report.changed_files = [f"src/changed_{index:03}.py" for index in range(MAX_MAP_NODES + 20)]
+    report.impacted_files = [
+        ImpactedFile("src/dependent.py", 1, ("src/changed_000.py", "src/dependent.py"))
+    ]
+    report.suggested_tests = ["tests/test_independent.py"]
+
+    output = render_impact_map(report)
+
+    assert output.count('class="node node-') == MAX_MAP_NODES
+    assert "src/dependent.py" in output
+    assert "tests/test_independent.py" in output
+    assert "SUGGESTED TEST" in output

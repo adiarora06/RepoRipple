@@ -19,8 +19,9 @@ MAP_PADDING = 36
 @dataclass(frozen=True)
 class _MapNode:
     path: str
-    distance: int
+    column: int
     kind: str
+    meta: str
 
 
 def render_impact_map(report: ImpactReport) -> str:
@@ -173,13 +174,13 @@ def render_impact_map(report: ImpactReport) -> str:
 
 
 def _render_graph(report: ImpactReport) -> str:
-    nodes = _select_nodes(report)
+    nodes, candidate_count = _select_nodes(report)
     if not nodes:
         return '<p class="panel-copy">No changed or affected source files to map.</p>'
 
     grouped: dict[int, list[_MapNode]] = {}
     for node in nodes:
-        grouped.setdefault(node.distance, []).append(node)
+        grouped.setdefault(node.column, []).append(node)
     for values in grouped.values():
         values.sort(key=lambda node: node.path)
 
@@ -218,13 +219,12 @@ def _render_graph(report: ImpactReport) -> str:
         x, y = positions[node.path]
         label = escape(_shorten(node.path))
         full_path = escape(node.path)
-        meta = "CHANGED" if node.distance == 0 else f"DISTANCE {node.distance}"
         node_markup.append(
             f'<g class="node node-{node.kind}" transform="translate({x} {y})">'
             f"<title>{full_path}</title><rect width=\"{NODE_WIDTH}\" "
             f"height=\"{NODE_HEIGHT}\" rx=\"11\"/>"
             f'<text x="14" y="24">{label}</text>'
-            f'<text class="meta" x="14" y="43">{meta}</text></g>'
+            f'<text class="meta" x="14" y="43">{node.meta}</text></g>'
         )
 
     width = max(
@@ -234,9 +234,9 @@ def _render_graph(report: ImpactReport) -> str:
     height = max(
         230,
         MAP_PADDING * 2
-        + max(Counter(node.distance for node in nodes).values()) * (NODE_HEIGHT + ROW_GAP),
+        + max(Counter(node.column for node in nodes).values()) * (NODE_HEIGHT + ROW_GAP),
     )
-    omitted = len(report.changed_files) + len(report.impacted_files) - len(nodes)
+    omitted = candidate_count - len(nodes)
     note = (
         f'<text x="{MAP_PADDING}" y="{height - 14}" fill="#95a8c7" font-size="11">'
         f"Map limited to {MAX_MAP_NODES} nodes; {omitted} additional files remain "
@@ -261,19 +261,50 @@ def _render_graph(report: ImpactReport) -> str:
     )
 
 
-def _select_nodes(report: ImpactReport) -> list[_MapNode]:
+def _select_nodes(report: ImpactReport) -> tuple[list[_MapNode], int]:
     tests = set(report.suggested_tests)
-    candidates = [
-        *(_MapNode(path, 0, "changed") for path in sorted(report.changed_files)),
-        *(
-            _MapNode(item.path, item.distance, "test" if item.path in tests else "impact")
+    changed_paths = set(report.changed_files)
+    impacted_paths = {item.path for item in report.impacted_files}
+    last_column = max((item.distance for item in report.impacted_files), default=0) + 1
+    groups = [
+        [_MapNode(path, 0, "changed", "CHANGED") for path in sorted(changed_paths)],
+        [
+            _MapNode(
+                item.path,
+                item.distance,
+                "test" if item.path in tests else "impact",
+                f"DISTANCE {item.distance}",
+            )
             for item in report.impacted_files
-        ),
+        ],
+        [
+            _MapNode(path, last_column, "test", "SUGGESTED TEST")
+            for path in sorted(tests - changed_paths - impacted_paths)
+            if _looks_like_path(path)
+        ],
     ]
-    unique: dict[str, _MapNode] = {}
-    for node in sorted(candidates, key=lambda item: (item.distance, item.path)):
-        unique.setdefault(node.path, node)
-    return list(unique.values())[:MAX_MAP_NODES]
+    groups = [group for group in groups if group]
+    candidate_count = sum(len(group) for group in groups)
+    selected: list[_MapNode] = []
+    positions = [0] * len(groups)
+    while len(selected) < MAX_MAP_NODES:
+        added = False
+        for index, group in enumerate(groups):
+            position = positions[index]
+            if position >= len(group):
+                continue
+            selected.append(group[position])
+            positions[index] += 1
+            added = True
+            if len(selected) == MAX_MAP_NODES:
+                break
+        if not added:
+            break
+    return sorted(selected, key=lambda node: (node.column, node.path)), candidate_count
+
+
+def _looks_like_path(value: str) -> bool:
+    return "/" in value or "\\" in value or "." in value.rsplit("/", maxsplit=1)[-1]
 
 
 def _render_impacted_files(report: ImpactReport) -> str:
