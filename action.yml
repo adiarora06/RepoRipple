@@ -1,5 +1,5 @@
 name: RepoRipple impact analysis
-description: Trace the blast radius of a pull request and produce Markdown and JSON reports.
+description: Trace a pull request's blast radius and produce Markdown, JSON, and visual HTML reports.
 author: Adi Arora
 
 branding:
@@ -24,7 +24,7 @@ inputs:
     required: false
     default: ""
   reports-directory:
-    description: Directory in which impact.md and impact.json are written.
+    description: Directory in which impact.md, impact.json, and impact.html are written.
     required: false
     default: reporipple-reports
 
@@ -35,6 +35,9 @@ outputs:
   json-report:
     description: Absolute path to the generated JSON report.
     value: ${{ steps.analyze.outputs.json-report }}
+  html-report:
+    description: Absolute path to the self-contained visual impact map.
+    value: ${{ steps.analyze.outputs.html-report }}
   risk-level:
     description: Deterministic low, medium, or high risk classification.
     value: ${{ steps.analyze.outputs.risk-level }}
@@ -84,14 +87,14 @@ runs:
         reports_directory="$(cd "$REPORIPPLE_REPORTS_DIRECTORY" && pwd -P)"
         markdown_report="$reports_directory/impact.md"
         json_report="$reports_directory/impact.json"
+        html_report="$reports_directory/impact.html"
 
         command=(reporipple "$REPORIPPLE_PATH" --max-depth "$REPORIPPLE_MAX_DEPTH")
         if [[ -n "$REPORIPPLE_BASE" ]]; then
           command+=(--base "$REPORIPPLE_BASE")
         fi
 
-        "${command[@]}" --format markdown --output "$markdown_report"
-        "${command[@]}" --format json --output "$json_report"
+        "${command[@]}" --format all --output "$reports_directory"
 
         risk_level="$(python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["risk_level"])' "$json_report")"
         if [[ "$risk_level" != "low" && "$risk_level" != "medium" && "$risk_level" != "high" ]]; then
@@ -102,6 +105,7 @@ runs:
         {
           echo "markdown-report=$markdown_report"
           echo "json-report=$json_report"
+          echo "html-report=$html_report"
           echo "risk-level=$risk_level"
         } >> "$GITHUB_OUTPUT"
 

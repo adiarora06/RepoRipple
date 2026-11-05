@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import webbrowser
 from pathlib import Path
 
 from reporipple import __version__
@@ -19,6 +20,7 @@ from reporipple.explain import (
     render_preview_markdown,
 )
 from reporipple.git import GitError, discover_changes
+from reporipple.impact_map import render_impact_map
 from reporipple.report import render_json, render_markdown
 from reporipple.scanner import scan_repository
 
@@ -48,13 +50,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Analyze an explicit changed path; repeat for multiple paths",
     )
     parser.add_argument("--max-depth", type=int, default=4, help="Maximum reverse dependency depth")
-    parser.add_argument("--format", choices=("markdown", "json"), default="markdown")
+    parser.add_argument(
+        "--format",
+        choices=("markdown", "json", "html", "all"),
+        default="markdown",
+        help=(
+            "Report format (default: markdown; html creates an impact map; all writes a bundle)"
+        ),
+    )
     parser.add_argument(
         "--fail-on",
         choices=("medium", "high"),
         help="Exit with status 2 when the report reaches this risk level",
     )
     parser.add_argument("--output", type=Path, help="Write the report to a file instead of stdout")
+    parser.add_argument(
+        "--open",
+        action="store_true",
+        dest="open_report",
+        help=(
+            "Open an HTML report in the default browser "
+            "(requires --format html/all and --output)"
+        ),
+    )
     explanation = parser.add_mutually_exclusive_group()
     explanation.add_argument(
         "--explain",
@@ -103,6 +121,21 @@ def main(argv: list[str] | None = None) -> int:
     if args.explain_model and not (args.explain or args.explain_preview):
         print("error: --explain-model requires --explain or --explain-preview", file=sys.stderr)
         return 1
+    if args.format in {"html", "all"} and (args.explain or args.explain_preview):
+        print(
+            "error: HTML impact maps are deterministic; use Markdown or JSON for explanations",
+            file=sys.stderr,
+        )
+        return 1
+    if args.format == "all" and args.output is None:
+        print("error: --format all requires --output DIRECTORY", file=sys.stderr)
+        return 1
+    if args.open_report and (args.format not in {"html", "all"} or args.output is None):
+        print(
+            "error: --open requires --format html/all and --output FILE/DIRECTORY",
+            file=sys.stderr,
+        )
+        return 1
     root = Path(args.path).resolve()
     if not root.is_dir():
         print(f"error: repository path does not exist: {root}", file=sys.stderr)
@@ -125,7 +158,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
-    rendered = render_json(report) if args.format == "json" else render_markdown(report)
+    if args.format == "json":
+        rendered = render_json(report)
+    elif args.format == "html":
+        rendered = render_impact_map(report)
+    elif args.format == "all":
+        rendered = ""
+    else:
+        rendered = render_markdown(report)
     if args.explain_preview:
         bundle = build_evidence_bundle(report)
         try:
@@ -181,7 +221,26 @@ def main(argv: list[str] | None = None) -> int:
                     + render_explanation_markdown(explanation, bundle.local_labels)
                 )
     if args.output:
-        args.output.write_text(rendered, encoding="utf-8")
+        if args.format == "all":
+            args.output.mkdir(parents=True, exist_ok=True)
+            (args.output / "impact.md").write_text(render_markdown(report), encoding="utf-8")
+            (args.output / "impact.json").write_text(render_json(report), encoding="utf-8")
+            html_output = args.output / "impact.html"
+            html_output.write_text(render_impact_map(report), encoding="utf-8")
+        else:
+            args.output.write_text(rendered, encoding="utf-8")
+            html_output = args.output
+        if args.open_report:
+            try:
+                opened = webbrowser.open(html_output.resolve().as_uri())
+            except webbrowser.Error as exc:
+                print(f"warning: could not open HTML report: {exc}", file=sys.stderr)
+            else:
+                if not opened:
+                    print(
+                        f"warning: no browser accepted the report; open {html_output.resolve()}",
+                        file=sys.stderr,
+                    )
     else:
         print(rendered, end="")
 

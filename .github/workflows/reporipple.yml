@@ -38,6 +38,7 @@ jobs:
           path: |
             ${{ steps.reporipple.outputs.markdown-report }}
             ${{ steps.reporipple.outputs.json-report }}
+            ${{ steps.reporipple.outputs.html-report }}
           if-no-files-found: error
           retention-days: 14
 
