@@ -90,6 +90,9 @@ Large results keep the full review list while limiting the visual canvas to 80 n
 [impact-map guide](https://github.com/adiarora06/RepoRipple/blob/main/docs/impact-map.md) or run the
 included deterministic demo with `./scripts/demo-impact-map.sh`.
 
+[Watch the 22-second impact-map demo](docs/assets/reporipple-impact-map-demo.mp4) — a silent,
+720p recording generated from the included checkout fixture.
+
 ## GitHub Action
 
 Add RepoRipple to a pull-request workflow to create impact reports and append the Markdown report
