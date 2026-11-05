@@ -66,3 +66,4 @@ def test_pr_workflow_uploads_the_visual_impact_map():
     document = WORKFLOW.read_text(encoding="utf-8")
 
     assert "${{ steps.reporipple.outputs.html-report }}" in document
+    assert "Workflow run and complete report bundle" in document
