@@ -2,6 +2,18 @@
 
 All notable changes to RepoRipple are documented here.
 
+## Unreleased
+
+### Added
+
+- A self-contained visual impact map via `--format html`, with deterministic SVG dependency paths,
+  accessible review details, restrictive content security, and an explicit `--open` workflow.
+- A one-scan `--format all` review bundle that stages and publishes Markdown, JSON, and HTML
+  together without replacing unrelated directory contents.
+- The public GitHub Action now emits `impact.html` and exposes it through the `html-report` output.
+- A deterministic checkout-service fixture and one-command demo for recording or evaluating the
+  impact-map workflow without an API key or network service.
+
 ## 0.5.1 - 2026-11-03
 
 ### Fixed

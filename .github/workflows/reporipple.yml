@@ -38,6 +38,7 @@ jobs:
           path: |
             ${{ steps.reporipple.outputs.markdown-report }}
             ${{ steps.reporipple.outputs.json-report }}
+            ${{ steps.reporipple.outputs.html-report }}
           if-no-files-found: error
           retention-days: 14
 
@@ -76,7 +77,7 @@ jobs:
             if (report.length > maxReportLength) {
               report = `${report.slice(0, maxReportLength)}\n\n_Report truncated. [Download the complete report](${runUrl})._\n`;
             }
-            const body = `${marker}\n${report}\n---\n[Workflow run and JSON artifact](${runUrl})`;
+            const body = `${marker}\n${report}\n---\n[Workflow run and complete report bundle](${runUrl})`;
             const issue_number = context.issue.number;
             const comments = await github.paginate(github.rest.issues.listComments, {
               ...context.repo,

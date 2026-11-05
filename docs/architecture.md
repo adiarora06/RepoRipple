@@ -13,7 +13,7 @@ flowchart LR
     Resolve --> Core[Deterministic impact engine]
     Govern --> Core
     Diff[Git diff or proposed files] --> Core
-    Core --> Report[Markdown and JSON]
+    Core --> Report[Markdown, JSON, and visual HTML]
     Report --> CLI[Local CLI]
     Report --> Action[GitHub Action]
     Report --> MCP[Read-only MCP tools]
@@ -29,10 +29,15 @@ flowchart LR
 | Layer | Responsibility | Network access |
 | --- | --- | --- |
 | Core scanner and analyzer | Build the import graph, trace reverse dependencies, suggest tests, and score deterministic risk | Never |
-| CLI | Select changes and render reports | Never, unless `--explain` is explicitly present |
+| CLI | Select changes and render text, machine-readable, or visual reports | Never, unless `--explain` is explicitly present |
 | GitHub Action | Run the CLI in CI and publish summaries, artifacts, and eligible PR comments | GitHub only |
 | MCP server | Give coding agents typed, read-only access within an allowed workspace root | Never |
 | OpenRouter adapter | Explain an anonymized evidence bundle | Explicit opt-in only |
+
+The HTML impact map is a renderer over the same `ImpactReport` model used by Markdown, JSON, the
+Action, and MCP payloads. It does not rescan the repository or introduce another scoring path. Its
+SVG layout is deterministic, all repository-controlled labels are HTML-escaped, and a restrictive
+content-security policy prevents the portable report from loading external resources.
 
 ## JavaScript and TypeScript resolution
 

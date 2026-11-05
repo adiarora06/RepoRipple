@@ -10,7 +10,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/adiarora06/RepoRipple/blob/v0.5.1/LICENSE)
 [![MCP Registry](https://img.shields.io/badge/MCP-Registry-6f42c1)](https://github.com/adiarora06/RepoRipple/blob/v0.5.1/docs/mcp.md)
 
-RepoRipple is a local-first change-impact analyzer for engineers and coding agents. It builds a lightweight dependency graph from a repository, reads the current Git diff, traces reverse dependencies, recommends relevant tests, and emits a review-ready Markdown or JSON report.
+RepoRipple is a local-first change-impact analyzer for engineers and coding agents. It builds a lightweight dependency graph from a repository, reads the current Git diff, traces reverse dependencies, recommends relevant tests, and emits review-ready Markdown, JSON, or a standalone visual impact map.
 
 The deterministic analyzer requires no API key, hosted service, source upload, or framework integration. An optional, explicitly requested OpenRouter explanation can turn its anonymized evidence into a short narrative without changing the underlying analysis.
 
@@ -44,6 +44,12 @@ reporipple . --base origin/main
 # Generate machine-readable context for an agent or automation.
 reporipple . --base origin/main --format json --output impact.json
 
+# Generate and open a self-contained visual blast-radius map.
+reporipple . --base origin/main --format html --output impact.html --open
+
+# Create the Markdown, JSON, and visual reports together, then open the map.
+reporipple . --base origin/main --format all --output reporipple-reports --open
+
 # Fail CI when a change reaches high risk.
 reporipple . --base origin/main --fail-on high
 
@@ -61,14 +67,36 @@ uvx reporipple . --base origin/main
 
 | Surface | Best for | Output |
 | --- | --- | --- |
-| CLI | Local review, scripts, and CI gates | Markdown or JSON impact report |
-| GitHub Action | Pull-request evidence and risk thresholds | Job summary, artifact, and optional stable PR comment |
+| CLI | Local review, scripts, and CI gates | Markdown, JSON, or visual HTML impact report |
+| GitHub Action | Pull-request evidence and risk thresholds | Job summary, three report artifacts, and optional stable PR comment |
 | MCP server | Codex, OpenCode, Cursor, Claude Code, and VS Code | Typed `forecast_change` and `analyze_worktree` tools |
+
+## Visual impact map
+
+`--format html` turns the same deterministic evidence into a portable review dashboard. The map
+lays out changed files, direct dependents, transitive dependents, and suggested tests from left to
+right, then keeps the complete review paths, risk signals, and verification list below it.
+
+```bash
+reporipple . --base origin/main --format html --output impact.html --open
+```
+
+Use `--format all --output reporipple-reports` to create `impact.md`, `impact.json`, and
+`impact.html` from one repository scan. Adding `--open` opens the HTML map after writing the bundle.
+
+The report has no external scripts, fonts, analytics, or network requests. Repository source code
+is never embedded; only the file paths and evidence already present in the standard report appear.
+Large results keep the full review list while limiting the visual canvas to 80 nodes. See the
+[impact-map guide](https://github.com/adiarora06/RepoRipple/blob/main/docs/impact-map.md) or run the
+included deterministic demo with `./scripts/demo-impact-map.sh`.
+
+[Watch the 22-second impact-map demo](docs/assets/reporipple-impact-map-demo.mp4) — a silent,
+720p recording generated from the included checkout fixture.
 
 ## GitHub Action
 
-Add RepoRipple to a pull-request workflow to create Markdown and JSON impact reports and append
-the Markdown report to the GitHub job summary:
+Add RepoRipple to a pull-request workflow to create impact reports and append the Markdown report
+to the GitHub job summary. This immutable v0.5.1 example produces Markdown and JSON:
 
 ```yaml
 name: RepoRipple
@@ -99,10 +127,11 @@ jobs:
             ${{ steps.reporipple.outputs.json-report }}
 ```
 
-The Action accepts `path`, `base`, `max-depth`, `fail-on`, and `reports-directory`. It outputs
-`markdown-report`, `json-report`, and `risk-level`. The example is pinned to RepoRipple's immutable
-v0.5.1 source commit; when upgrading, replace it with the commit SHA for the desired release. Use
-`fetch-depth: 0` so the requested base revision is available.
+The Action accepts `path`, `base`, `max-depth`, `fail-on`, and `reports-directory`. Current source
+outputs `markdown-report`, `json-report`, `html-report`, and `risk-level`; the HTML output becomes
+available to external consumers in the next tagged release. The example stays pinned to
+RepoRipple's immutable v0.5.1 source commit until then. When upgrading, replace it with the commit
+SHA for the desired release. Use `fetch-depth: 0` so the requested base revision is available.
 
 This repository's own [pull-request workflow](https://github.com/adiarora06/RepoRipple/blob/v0.5.1/.github/workflows/reporipple.yml) demonstrates a
 fork-safe commenting design. Analysis runs with read-only contents access. A separate job updates

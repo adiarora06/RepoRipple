@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 ACTION = ROOT / "action.yml"
 WORKFLOW = ROOT / ".github" / "workflows" / "reporipple.yml"
+DEMO = ROOT / "scripts" / "demo-impact-map.sh"
 PINNED_ACTION = re.compile(r"uses:\s+actions/[\w-]+@([0-9a-f]{40})(?:\s|$)")
 
 
@@ -11,12 +12,15 @@ def _official_action_references(document: str) -> list[str]:
     return [line.strip() for line in document.splitlines() if "uses: actions/" in line]
 
 
-def test_public_action_emits_both_report_formats_and_summary():
+def test_public_action_emits_all_report_formats_and_summary():
     document = ACTION.read_text(encoding="utf-8")
 
     assert "using: composite" in document
     assert 'markdown_report="$reports_directory/impact.md"' in document
     assert 'json_report="$reports_directory/impact.json"' in document
+    assert 'html_report="$reports_directory/impact.html"' in document
+    assert '"${command[@]}" --format all --output "$reports_directory"' in document
+    assert "html-report=$html_report" in document
     assert 'cat "$markdown_report" >> "$GITHUB_STEP_SUMMARY"' in document
 
 
@@ -57,3 +61,19 @@ def test_pr_workflow_keeps_analysis_unprivileged_and_skips_fork_comments():
     assert "github.event.pull_request.head.repo.full_name == github.repository" in comment_job
     assert "pull-requests: write" in comment_job
     assert "startsWith(marker)" in comment_job
+
+
+def test_pr_workflow_uploads_the_visual_impact_map():
+    document = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "${{ steps.reporipple.outputs.html-report }}" in document
+    assert "Workflow run and complete report bundle" in document
+
+
+def test_demo_runs_local_source_without_resolving_packages():
+    document = DEMO.read_text(encoding="utf-8")
+
+    assert "uv run" not in document
+    assert "pip install" not in document
+    assert 'PYTHONPATH="$source_path"' in document
+    assert "-m reporipple.cli" in document
