@@ -80,7 +80,7 @@ reference pinned to that release's immutable commit SHA rather than switching to
 
 ## Deterministic demo
 
-[Watch the 22-second demo](assets/reporipple-impact-map-demo.mp4) (silent MP4, 720p, 1.1 MB). It
+[Watch the 22-second demo](https://github.com/adiarora06/RepoRipple/blob/v0.6.0/docs/assets/reporipple-impact-map-demo.mp4) (silent MP4, 720p, 1.1 MB). It
 records the real report generated from the included checkout fixture; there is no mocked product
 UI, external service, or API key.
 

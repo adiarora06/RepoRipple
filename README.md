@@ -333,7 +333,7 @@ uv pip install --python .venv/bin/python -e ".[dev]"
 uv build
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for RepoRipple's design contracts, test map, and pull-request
+See [CONTRIBUTING.md](https://github.com/adiarora06/RepoRipple/blob/v0.6.0/CONTRIBUTING.md) for RepoRipple's design contracts, test map, and pull-request
 expectations.
 
 ## Privacy and security
@@ -347,7 +347,7 @@ body can be audited first.
 
 Report suspected vulnerabilities through
 [GitHub private vulnerability reporting](https://github.com/adiarora06/RepoRipple/security/advisories/new);
-see [SECURITY.md](SECURITY.md) for scope and reporting guidance.
+see [SECURITY.md](https://github.com/adiarora06/RepoRipple/blob/v0.6.0/SECURITY.md) for scope and reporting guidance.
 
 ## License
 

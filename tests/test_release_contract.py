@@ -25,6 +25,15 @@ def test_pypi_readme_proves_mcp_namespace_ownership():
     assert "<!-- mcp-name: io.github.adiarora06/reporipple -->" in readme
 
 
+def test_published_markdown_has_no_relative_links():
+    published_markdown = [ROOT / "README.md", *(ROOT / "docs").rglob("*.md")]
+
+    for path in published_markdown:
+        content = path.read_text(encoding="utf-8")
+        relative_links = re.findall(r"\[[^]]+\]\((?!https?://|#)([^)]+)\)", content)
+        assert relative_links == [], f"relative Markdown links in {path.relative_to(ROOT)}"
+
+
 def test_release_actions_are_immutably_pinned_and_publish_with_oidc():
     workflow = WORKFLOW.read_text(encoding="utf-8")
     references = [line.strip() for line in workflow.splitlines() if "uses:" in line]
