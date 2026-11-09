@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "reporipple"
-version = "0.5.1"
+version = "0.6.0"
 description = "Deterministic change-impact analysis for engineers and coding agents."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -52,6 +52,12 @@ Changelog = "https://github.com/adiarora06/RepoRipple/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/reporipple"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "/docs/assets/*.mp4",
+  "/docs/assets/*.png",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

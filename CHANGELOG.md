@@ -4,6 +4,8 @@ All notable changes to RepoRipple are documented here.
 
 ## Unreleased
 
+## 0.6.0 - 2026-11-08
+
 ### Added
 
 - A self-contained visual impact map via `--format html`, with deterministic SVG dependency paths,
@@ -13,6 +15,24 @@ All notable changes to RepoRipple are documented here.
 - The public GitHub Action now emits `impact.html` and exposes it through the `html-report` output.
 - A deterministic checkout-service fixture and one-command demo for recording or evaluating the
   impact-map workflow without an API key or network service.
+- Contributor and security documentation, issue forms, and a pull-request template for a clearer
+  open-source contribution path.
+
+### Changed
+
+- Visual node selection now reserves room for dependents and suggested tests when a change exceeds
+  the 80-node canvas limit, and filename-matched tests remain visible without a dependency edge.
+- `--open` treats browser-launch failures as non-fatal after the report is written, while CLI help
+  distinguishes single-report files from all-format bundle directories.
+
+### Security
+
+- HTML reports escape repository-controlled labels, load no external resources, and enforce a
+  restrictive content security policy.
+- Review bundles are serialized, staged, and replaced together; symlinked destinations and
+  directories containing unrelated files are rejected instead of being overwritten.
+- Tagged release distributions now receive GitHub build-provenance attestations before trusted
+  publication to PyPI.
 
 ## 0.5.1 - 2026-11-03
 

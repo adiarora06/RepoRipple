@@ -71,6 +71,13 @@ jobs:
           python -m venv /tmp/reporipple-smoke
           /tmp/reporipple-smoke/bin/python -m pip install dist/*.whl
           /tmp/reporipple-smoke/bin/reporipple --help
+          /tmp/reporipple-smoke/bin/reporipple examples/checkout-demo \
+            --changed src/checkout_demo/billing/store.py \
+            --format all \
+            --output /tmp/reporipple-smoke-reports
+          test -s /tmp/reporipple-smoke-reports/impact.md
+          test -s /tmp/reporipple-smoke-reports/impact.json
+          test -s /tmp/reporipple-smoke-reports/impact.html
 
       - name: Store distributions
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
