@@ -7,8 +7,8 @@
 [![PyPI](https://img.shields.io/pypi/v/reporipple?label=PyPI)](https://pypi.org/project/reporipple/)
 [![Python versions](https://img.shields.io/pypi/pyversions/reporipple)](https://pypi.org/project/reporipple/)
 [![CI](https://github.com/adiarora06/RepoRipple/actions/workflows/ci.yml/badge.svg)](https://github.com/adiarora06/RepoRipple/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/adiarora06/RepoRipple/blob/v0.5.1/LICENSE)
-[![MCP Registry](https://img.shields.io/badge/MCP-Registry-6f42c1)](https://github.com/adiarora06/RepoRipple/blob/v0.5.1/docs/mcp.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/adiarora06/RepoRipple/blob/v0.6.0/LICENSE)
+[![MCP Registry](https://img.shields.io/badge/MCP-Registry-6f42c1)](https://github.com/adiarora06/RepoRipple/blob/v0.6.0/docs/mcp.md)
 
 RepoRipple is a local-first change-impact analyzer for engineers and coding agents. It builds a lightweight dependency graph from a repository, reads the current Git diff, traces reverse dependencies, recommends relevant tests, and emits review-ready Markdown, JSON, or a standalone visual impact map.
 
@@ -16,8 +16,8 @@ The deterministic analyzer requires no API key, hosted service, source upload, o
 
 [PyPI](https://pypi.org/project/reporipple/) ·
 [Portfolio case study](https://www.adiarora.dev/open-source/reporipple) ·
-[MCP setup](https://github.com/adiarora06/RepoRipple/blob/v0.5.1/docs/mcp.md) ·
-[v0.5.1 release](https://github.com/adiarora06/RepoRipple/releases/tag/v0.5.1)
+[MCP setup](https://github.com/adiarora06/RepoRipple/blob/v0.6.0/docs/mcp.md) ·
+[v0.6.0 release](https://github.com/adiarora06/RepoRipple/releases/tag/v0.6.0)
 
 ## Why RepoRipple?
 
@@ -90,13 +90,13 @@ Large results keep the full review list while limiting the visual canvas to 80 n
 [impact-map guide](https://github.com/adiarora06/RepoRipple/blob/main/docs/impact-map.md) or run the
 included deterministic demo with `./scripts/demo-impact-map.sh`.
 
-[Watch the 22-second impact-map demo](docs/assets/reporipple-impact-map-demo.mp4) — a silent,
-720p recording generated from the included checkout fixture.
+[Watch the 22-second impact-map demo](https://github.com/adiarora06/RepoRipple/blob/v0.6.0/docs/assets/reporipple-impact-map-demo.mp4) — a silent, 720p recording generated from the
+included checkout fixture.
 
 ## GitHub Action
 
 Add RepoRipple to a pull-request workflow to create impact reports and append the Markdown report
-to the GitHub job summary. This immutable v0.5.1 example produces Markdown and JSON:
+to the GitHub job summary. This immutable v0.6.0 example produces Markdown, JSON, and visual HTML:
 
 ```yaml
 name: RepoRipple
@@ -116,7 +116,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - id: reporipple
-        uses: adiarora06/RepoRipple@1d4f761f6ba3c55f4fd0dc04e0147e0ce737b52c # v0.5.1 release source
+        uses: adiarora06/RepoRipple@de0ba8ff4059928cdf59481d4fb77989da482735 # v0.6.0 release source
         with:
           base: ${{ github.event.pull_request.base.sha }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -125,15 +125,15 @@ jobs:
           path: |
             ${{ steps.reporipple.outputs.markdown-report }}
             ${{ steps.reporipple.outputs.json-report }}
+            ${{ steps.reporipple.outputs.html-report }}
 ```
 
-The Action accepts `path`, `base`, `max-depth`, `fail-on`, and `reports-directory`. Current source
-outputs `markdown-report`, `json-report`, `html-report`, and `risk-level`; the HTML output becomes
-available to external consumers in the next tagged release. The example stays pinned to
-RepoRipple's immutable v0.5.1 source commit until then. When upgrading, replace it with the commit
-SHA for the desired release. Use `fetch-depth: 0` so the requested base revision is available.
+The Action accepts `path`, `base`, `max-depth`, `fail-on`, and `reports-directory`. Version 0.6.0
+outputs `markdown-report`, `json-report`, `html-report`, and `risk-level`. The example is pinned to
+the release source commit rather than a mutable tag. When upgrading, replace it with the commit SHA
+for the desired release. Use `fetch-depth: 0` so the requested base revision is available.
 
-This repository's own [pull-request workflow](https://github.com/adiarora06/RepoRipple/blob/v0.5.1/.github/workflows/reporipple.yml) demonstrates a
+This repository's own [pull-request workflow](https://github.com/adiarora06/RepoRipple/blob/v0.6.0/.github/workflows/reporipple.yml) demonstrates a
 fork-safe commenting design. Analysis runs with read-only contents access. A separate job updates
 one stable RepoRipple comment only for branches in the same repository; fork pull requests keep
 their report in the job summary and downloadable artifact without receiving a write-capable token.
@@ -158,7 +158,7 @@ actual Git changes. See the
 [MCP setup guide](https://github.com/adiarora06/RepoRipple/blob/main/docs/mcp.md) for
 client-specific commands and configuration.
 
-The [architecture guide](https://github.com/adiarora06/RepoRipple/blob/v0.5.1/docs/architecture.md) explains how the CLI, GitHub Action,
+The [architecture guide](https://github.com/adiarora06/RepoRipple/blob/v0.6.0/docs/architecture.md) explains how the CLI, GitHub Action,
 MCP server, and optional explanation layer share one deterministic analysis engine.
 
 ## Example report
@@ -333,7 +333,7 @@ uv pip install --python .venv/bin/python -e ".[dev]"
 uv build
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for RepoRipple's design contracts, test map, and pull-request
+See [CONTRIBUTING.md](https://github.com/adiarora06/RepoRipple/blob/v0.6.0/CONTRIBUTING.md) for RepoRipple's design contracts, test map, and pull-request
 expectations.
 
 ## Privacy and security
@@ -347,7 +347,7 @@ body can be audited first.
 
 Report suspected vulnerabilities through
 [GitHub private vulnerability reporting](https://github.com/adiarora06/RepoRipple/security/advisories/new);
-see [SECURITY.md](SECURITY.md) for scope and reporting guidance.
+see [SECURITY.md](https://github.com/adiarora06/RepoRipple/blob/v0.6.0/SECURITY.md) for scope and reporting guidance.
 
 ## License
 
