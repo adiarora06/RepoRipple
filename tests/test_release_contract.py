@@ -7,6 +7,7 @@ from reporipple import __version__
 
 ROOT = Path(__file__).parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 PINNED_ACTION = re.compile(r"uses:\s+[^\s]+@([0-9a-f]{40})(?:\s|$)")
 
 
@@ -17,6 +18,21 @@ def test_package_and_registry_versions_match():
     assert project["project"]["version"] == __version__
     assert registry["version"] == __version__
     assert registry["packages"][0]["version"] == __version__
+
+
+def test_supported_python_versions_are_classified_and_tested():
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+    supported = {"3.11", "3.12", "3.13", "3.14"}
+
+    classifiers = set(project["project"]["classifiers"])
+    classified = {
+        classifier.rsplit(" ", 1)[-1]
+        for classifier in classifiers
+        if classifier.startswith("Programming Language :: Python :: 3.")
+    }
+    assert classified == supported
+    assert 'python-version: ["3.11", "3.12", "3.13", "3.14"]' in workflow
 
 
 def test_pypi_readme_proves_mcp_namespace_ownership():
