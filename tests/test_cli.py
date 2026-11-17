@@ -48,6 +48,61 @@ def test_html_impact_map_can_be_written_and_opened(monkeypatch, tmp_path):
     assert opened == [report.resolve().as_uri()]
 
 
+def test_single_report_creates_parent_directories(tmp_path):
+    write(tmp_path, "src/store.py", "def load(): return 1\n")
+    report = tmp_path / "artifacts" / "review" / "impact.md"
+
+    assert (
+        main(
+            [
+                str(tmp_path),
+                "--changed",
+                "src/store.py",
+                "--output",
+                str(report),
+            ]
+        )
+        == 0
+    )
+
+    assert report.read_text(encoding="utf-8").startswith("# RepoRipple impact report:")
+
+
+def test_single_report_preserves_previous_file_when_publish_fails(
+    monkeypatch, tmp_path, capsys
+):
+    write(tmp_path, "src/store.py", "def load(): return 1\n")
+    report = tmp_path / "impact.md"
+    report.write_text("previous report\n", encoding="utf-8")
+    real_replace = os.replace
+
+    def fail_staged_publish(source, destination):
+        if Path(destination) == report:
+            raise OSError("simulated report publish failure")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr("reporipple.cli.os.replace", fail_staged_publish)
+
+    assert (
+        main(
+            [
+                str(tmp_path),
+                "--changed",
+                "src/store.py",
+                "--output",
+                str(report),
+            ]
+        )
+        == 1
+    )
+
+    error = capsys.readouterr().err
+    assert "could not write report" in error
+    assert "simulated report publish failure" in error
+    assert report.read_text(encoding="utf-8") == "previous report\n"
+    assert list(tmp_path.glob(".impact.md-staging-*.tmp")) == []
+
+
 @pytest.mark.parametrize(
     "arguments, message",
     [

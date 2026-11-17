@@ -242,8 +242,11 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
             html_output = args.output / "impact.html"
         else:
-            args.output.write_text(rendered, encoding="utf-8")
-            html_output = args.output
+            try:
+                html_output = _write_report_file(args.output, rendered)
+            except OSError as exc:
+                print(f"error: could not write report: {exc}", file=sys.stderr)
+                return 1
         if args.open_report:
             try:
                 opened = webbrowser.open(html_output.resolve().as_uri())
@@ -264,6 +267,25 @@ def main(argv: list[str] | None = None) -> int:
 
 
 _BUNDLE_FILES = ("impact.md", "impact.json", "impact.html")
+
+
+def _write_report_file(output: Path, rendered: str) -> Path:
+    """Atomically publish one report, creating its parent directory when needed."""
+    output = output.expanduser().absolute()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, staging_name = tempfile.mkstemp(
+        prefix=f".{output.name}-staging-", suffix=".tmp", dir=output.parent
+    )
+    staging = Path(staging_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(rendered)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(staging, output)
+    finally:
+        staging.unlink(missing_ok=True)
+    return output
 
 
 def _write_report_bundle(directory: Path, report: ImpactReport) -> None:
